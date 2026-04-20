@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  # Servicio de Base de Datos
+  database:
+    image: mongo:latest
+    container_name: b2g_mongodb
+    restart: always
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db # Para que los datos no se borren al apagar el contenedor
+
+  # Servicio del Backend (Node.js)
+  backend:
+    build: ./backend
+    container_name: b2g_backend
+    ports:
+      - "3000:3000"
+    environment:
+      # IMPORTANTE: Aquí la URL usa 'database' en lugar de 'localhost'
+      - MONGO_URI=mongodb://database:27017/bound2game
+      - PORT=3000
+    depends_on:
+      - database
+    volumes:
+      - ./backend:/app # Hot-reload: los cambios en tu código se reflejan al instante
+      - /app/node_modules # Evita que los nodos locales sobrescriban los del contenedor
+
+volumes:
+  mongo_data:
