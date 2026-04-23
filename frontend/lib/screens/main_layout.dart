@@ -20,7 +20,8 @@ import '../screens/dashboard_screen.dart';
 import '../screens/library_screen.dart';
 import '../screens/social_screen.dart';
 import '../screens/deals_screen.dart';
-import '../screens/settings_screen.dart';
+import '../screens/profile_screen.dart';
+import '../screens/search_delegate.dart';
 import '../theme/app_theme.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -92,22 +93,22 @@ List<_NavItem> _buildNavItems(ValueChanged<int> onNavigate) => [
     screen: LibraryScreen(),
   ),
   const _NavItem(
-    label: 'Social',
-    icon: Icons.people_outline_rounded,
-    activeIcon: Icons.people_rounded,
-    screen: SocialScreen(),
-  ),
-  const _NavItem(
     label: 'Ofertas',
     icon: Icons.local_offer_outlined,
     activeIcon: Icons.local_offer_rounded,
     screen: DealsScreen(),
   ),
   const _NavItem(
-    label: 'Ajustes',
-    icon: Icons.settings_outlined,
-    activeIcon: Icons.settings_rounded,
-    screen: SettingsScreen(),
+    label: 'Social',
+    icon: Icons.people_outline_rounded,
+    activeIcon: Icons.people_rounded,
+    screen: SocialScreen(),
+  ),
+  const _NavItem(
+    label: 'Perfil',
+    icon: Icons.person_outline_rounded,
+    activeIcon: Icons.person_rounded,
+    screen: ProfileScreen(isOwnProfile: true),
   ),
 ];
 
@@ -132,7 +133,6 @@ class _MainLayoutState extends State<MainLayout>
     with SingleTickerProviderStateMixin {
   int _selectedIndex = 0;
   bool _isPageLoading = false;
-  static const int _unreadCount = 2;
 
   late final List<_NavItem> _navItems;
 
@@ -155,14 +155,17 @@ class _MainLayoutState extends State<MainLayout>
       backgroundColor: const Color(0xFF151515),
       elevation: 0,
       toolbarHeight: 64,
-      title: _SearchBar(),
+      // Se eliminó la barra estática, ahora el título puede ser el logo o nada.
+      title: const Text('Bound2Game', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF00E5FF))),
       actions: [
         if (_isPageLoading) _LoadingIndicator(),
+        IconButton(
+          icon: const Icon(Icons.search_rounded, color: Color(0xFFD1D1D1)),
+          onPressed: () {
+            showSearch(context: context, delegate: B2GSearchDelegate());
+          },
+        ),
         const SizedBox(width: 8),
-        _NotificationBell(unreadCount: _unreadCount),
-        const SizedBox(width: 12),
-        _UserBadge(),
-        const SizedBox(width: 16),
       ],
     );
   }
@@ -391,69 +394,6 @@ class _NavBarItem extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: _SearchBar — Barra de búsqueda del AppBar
-// Equivalente al <input> de búsqueda en el <header> de Layout.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SearchBar extends StatefulWidget {
-  @override
-  State<_SearchBar> createState() => _SearchBarState();
-}
-
-class _SearchBarState extends State<_SearchBar> {
-  final _controller = TextEditingController();
-  final _focus = FocusNode();
-  bool _isFocused = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _focus.addListener(() => setState(() => _isFocused = _focus.hasFocus));
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    _focus.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
-      height: 38,
-      decoration: BoxDecoration(
-        color: const Color(0xFF1E1E1E),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: _isFocused
-              ? const Color(0xFF00E5FF).withOpacity(0.4)
-              : const Color(0xFF2A2A2A),
-          width: _isFocused ? 1.5 : 1,
-        ),
-        boxShadow: _isFocused
-            ? [const BoxShadow(color: Color(0x1400E5FF), blurRadius: 8)]
-            : null,
-      ),
-      child: TextField(
-        controller: _controller,
-        focusNode: _focus,
-        style: const TextStyle(color: Color(0xFFD1D1D1), fontSize: 13),
-        decoration: const InputDecoration(
-          hintText: 'Buscar juegos, usuarios...',
-          hintStyle: TextStyle(color: Color(0xFF555555), fontSize: 13),
-          prefixIcon: Icon(Icons.search_rounded, color: Color(0xFF555555), size: 18),
-          border: InputBorder.none,
-          contentPadding: EdgeInsets.symmetric(vertical: 10),
-          isDense: true,
-        ),
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // WIDGET: _LoadingIndicator
 // Equivalente al indicador de carga animado del <header> en Layout.tsx
 // ─────────────────────────────────────────────────────────────────────────────
@@ -490,134 +430,4 @@ class _LoadingIndicator extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: _NotificationBell
-// Equivalente al botón de Bell con badge de conteo en Layout.tsx
-// ─────────────────────────────────────────────────────────────────────────────
 
-class _NotificationBell extends StatefulWidget {
-  const _NotificationBell({required this.unreadCount});
-
-  final int unreadCount;
-
-  @override
-  State<_NotificationBell> createState() => _NotificationBellState();
-}
-
-class _NotificationBellState extends State<_NotificationBell> {
-  bool _isOpen = false;
-
-  // Notificaciones de ejemplo (de NOTIFICATIONS en Layout.tsx)
-  static const List<Map<String, dynamic>> _notifications = [
-    {'text': 'NightSaber_X te ha enviado una solicitud de equipo', 'time': '2m', 'unread': true},
-    {'text': '¡The Witcher 3 completado! Logro desbloqueado', 'time': '1h', 'unread': true},
-    {'text': '3 juegos nuevos añadidos a tu biblioteca', 'time': '3h', 'unread': false},
-    {'text': 'Nuevo miembro en tu grupo: StarPixel_77', 'time': '5h', 'unread': false},
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return Stack(
-      clipBehavior: Clip.none,
-      children: [
-        // Botón campana
-        GestureDetector(
-          onTap: () => setState(() => _isOpen = !_isOpen),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: _isOpen
-                  ? const Color(0xFF00E5FF).withOpacity(0.1)
-                  : const Color(0xFFFFFFFF).withOpacity(0.04),
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: const Color(0xFF2A2A2A)),
-            ),
-            child: Icon(
-              Icons.notifications_rounded,
-              size: 18,
-              color: _isOpen ? const Color(0xFF00E5FF) : const Color(0xFF888888),
-            ),
-          ),
-        ),
-        // Badge de conteo
-        if (widget.unreadCount > 0)
-          Positioned(
-            top: -4,
-            right: -4,
-            child: Container(
-              width: 16,
-              height: 16,
-              decoration: BoxDecoration(
-                color: const Color(0xFFFF4040),
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFF151515), width: 1.5),
-              ),
-              child: Center(
-                child: Text(
-                  '${widget.unreadCount}',
-                  style: const TextStyle(
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: _UserBadge — Mini perfil en el AppBar
-// Equivalente al User Badge del <header> en Layout.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _UserBadge extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Avatar con borde cyan
-        Container(
-          width: 32,
-          height: 32,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: const Color(0xFF00E5FF), width: 2),
-          ),
-          child: const ClipOval(
-            child: Icon(Icons.person_rounded, size: 20, color: Color(0xFF888888)),
-          ),
-        ),
-        const SizedBox(width: 6),
-        Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: const [
-            Text(
-              'NightSaber_X',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFFD1D1D1),
-                height: 1.2,
-              ),
-            ),
-            Text(
-              '★ Leyenda',
-              style: TextStyle(
-                fontSize: 10,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFFFFD700),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-}

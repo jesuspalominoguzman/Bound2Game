@@ -18,6 +18,7 @@
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
 import '../widgets/user_card.dart';
+import 'chat_screen.dart';
 
 // ── Constantes de color ───────────────────────────────────────────────────────
 const _bgCard    = Color(0xFF181818);
@@ -159,9 +160,11 @@ class _SocialScreenState extends State<SocialScreen> {
                     child: UserCard(
                       key: ValueKey(user.id),
                       user: user,
-                      onTap: () {
-                        // TODO(nav): context.push('/social/profile/${user.id}');
-                      },
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ChatScreen(user: user),
+                        ),
+                      ),
                       onConnect: () {
                         // TODO(backend): SocialService.sendFriendRequest(user.id);
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -368,9 +371,11 @@ class _MatchmakingSection extends StatelessWidget {
             itemBuilder: (context, index) => UserCardExpanded(
               key: ValueKey(users[index].id),
               user: users[index],
-              onTap: () {
-                // TODO(nav): context.push('/social/profile/${users[index].id}');
-              },
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ChatScreen(user: users[index]),
+                ),
+              ),
               onConnect: () {
                 // TODO(backend): SocialService.sendFriendRequest(users[index].id);
               },

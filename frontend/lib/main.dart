@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'screens/main_layout.dart';
+import 'screens/login_screen.dart';
 import 'theme/app_theme.dart';
 
 void main() {
@@ -57,11 +58,49 @@ class Bound2GameApp extends StatelessWidget {
       darkTheme: buildAppTheme(),
       themeMode: ThemeMode.dark,
 
-      // ── Pantalla inicial ──────────────────────────────────────────────────
-      // TODO: Reemplazar por el router/navigator definitivo cuando se
-      // implementen las pantallas (screens/).
-      home: const MainLayout(),
+      // ── Pantalla inicial (AuthWrapper) ────────────────────────────────────
+      home: const AuthWrapper(),
     );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AUTH WRAPPER
+// Controlador principal de navegación de la app.
+// Decidirá si mostrar LoginScreen o MainLayout.
+// ─────────────────────────────────────────────────────────────────────────────
+
+class AuthWrapper extends StatefulWidget {
+  const AuthWrapper({super.key});
+
+  @override
+  State<AuthWrapper> createState() => _AuthWrapperState();
+}
+
+class _AuthWrapperState extends State<AuthWrapper> {
+  // TODO(backend): Leer estado real de autenticación de Firebase/SharedPreferences.
+  // Por defecto, iniciamos con la pantalla de Login para probar el bypass.
+  bool _isLoggedIn = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkAuthStatus();
+  }
+
+  Future<void> _checkAuthStatus() async {
+    // Simular carga de token
+    await Future.delayed(const Duration(milliseconds: 500));
+    // setState(() => _isLoggedIn = ...);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoggedIn) {
+      return const MainLayout();
+    } else {
+      return const LoginScreen();
+    }
   }
 }
 
