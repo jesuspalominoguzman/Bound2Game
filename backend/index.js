@@ -1,6 +1,8 @@
+require('dotenv').config();
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
+
+const gameRoutes = require('./src/routes/gameRoutes');
 
 // Inicializamos la app de Express
 const app = express();
@@ -9,14 +11,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Puerto y URI de conexión (Preparado para funcionar con Docker)
+// Puerto
 const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://db:27017/bound2game';
 
-// Conexión a MongoDB
-mongoose.connect(MONGO_URI)
-    .then(() => console.log('🟢 Conectado a la base de datos de Bound2Game'))
-    .catch(err => console.error('🔴 Error al conectar a MongoDB:', err));
+// Rutas base
+app.use('/api/games', gameRoutes);
 
 // Ruta de prueba
 app.get('/', (req, res) => {
