@@ -16,46 +16,47 @@ import 'package:google_fonts/google_fonts.dart';
 
 /// Paleta de colores del sistema de diseño Bound2Game.
 abstract final class AppColors {
-  // Fondos
-  /// --background: oklch(0.145 0 0) ≈ #1A1A1A
-  static const Color background      = Color(0xFF1A1A1A);
-  /// --card: oklch(0.145 0 0)
-  static const Color card            = Color(0xFF1A1A1A);
-  /// --sidebar: oklch(0.205 0 0) ≈ #303030
-  static const Color sidebar         = Color(0xFF303030);
-  /// --secondary/muted/accent: oklch(0.269 0 0) ≈ #3E3E3E
-  static const Color surface         = Color(0xFF3E3E3E);
-  /// Input background (dark equivalent of #f3f3f5)
-  static const Color inputBackground = Color(0xFF2C2C2E);
+  // ── Fondos ────────────────────────────────────────────────────────────────
+  /// Fondo principal: Negro puro (#000000)
+  static const Color background      = Color(0xFF000000);
+  /// Superficie de tarjetas: Gris oscuro (#282828)
+  static const Color card            = Color(0xFF282828);
+  /// Sidebar / barra de navegación
+  static const Color sidebar         = Color(0xFF000000);
+  /// Surface secundaria (chips, inputs resting)
+  static const Color surface         = Color(0xFF333333);
+  /// Fondo de campos de texto
+  static const Color inputBackground = Color(0xFF111111);
 
-  // Primer plano
-  /// --foreground: oklch(0.985 0 0) ≈ #F7F7F7
-  static const Color foreground      = Color(0xFFF7F7F7);
-  /// --muted-foreground: oklch(0.708 0 0) ≈ #8E8E8E
-  static const Color mutedForeground = Color(0xFF8E8E8E);
+  // ── Primer plano ──────────────────────────────────────────────────────────
+  /// Texto principal: Blanco puro (#FFFFFF)
+  static const Color foreground      = Color(0xFFFFFFFF);
+  /// Texto secundario / muted
+  static const Color mutedForeground = Color(0xFFAAAAAA);
 
-  // Primario (dark: blanco)
-  /// --primary: oklch(0.985 0 0) ≈ #F7F7F7
-  static const Color primary            = Color(0xFFF7F7F7);
-  /// --primary-foreground: oklch(0.205 0 0) ≈ #303030
-  static const Color primaryForeground  = Color(0xFF303030);
+  // ── Primario (blanco suave para textos sobre acento) ──────────────────────
+  static const Color primary            = Color(0xFFFFFFFF);
+  static const Color primaryForeground  = Color(0xFF000000);
 
-  // Sidebar primary (accent azul eléctrico)
-  /// --sidebar-primary: oklch(0.488 0.243 264.376) ≈ #4A6CF7
-  static const Color sidebarPrimary            = Color(0xFF4A6CF7);
-  static const Color sidebarPrimaryForeground  = Color(0xFFF7F7F7);
+  // ── Acento principal: Amarillo (#FFE600) ──────────────────────────────
+  /// Color de acento global — botones, bordes activos, íconos seleccionados.
+  static const Color accent            = Color(0xFFFFE600);
+  /// Variante clara/secundaria del acento para gradientes (#FFF566)
+  static const Color accentDark        = Color(0xFFFFF566);
+  /// Foreground sobre botones de acento (negro para contraste)
+  static const Color accentForeground  = Color(0xFF000000);
 
-  // Destructivo
-  /// --destructive: oklch(0.396 0.141 25.723) ≈ #8B2020
+  // Alias semántico: sidebarPrimary ahora apunta al acento amarillo
+  static const Color sidebarPrimary            = accent;
+  static const Color sidebarPrimaryForeground  = accentForeground;
+
+  // ── Destructivo ───────────────────────────────────────────────────────────
   static const Color destructive           = Color(0xFF8B2020);
-  /// --destructive-foreground: oklch(0.637 0.237 25.331) ≈ #FF6B6B
   static const Color destructiveForeground = Color(0xFFFF6B6B);
 
-  // Bordes
-  /// --border: oklch(0.269 0 0) ≈ #3E3E3E
-  static const Color border = Color(0xFF3E3E3E);
-  /// --ring: oklch(0.439 0 0) ≈ #5C5C5C
-  static const Color ring   = Color(0xFF5C5C5C);
+  // ── Bordes ────────────────────────────────────────────────────────────────
+  static const Color border = Color(0xFF2A2A2A);
+  static const Color ring   = Color(0xFF3A3A3A);
 
   // ── Reputación (REPUTATION_CONFIG en gameData.ts) ─────────────────────────
   static const Color repLegendary = Color(0xFFFFD700);
@@ -64,11 +65,11 @@ abstract final class AppColors {
   static const Color repNeutral   = Color(0xFF888888);
   static const Color repNegative  = Color(0xFFFF4040);
 
-  static Color repLegendaryBg = const Color(0xFFFFD700).withOpacity(0.15);
-  static Color repExemplarBg  = const Color(0xFF4AF626).withOpacity(0.15);
-  static Color repPositiveBg  = const Color(0xFF00E5FF).withOpacity(0.15);
-  static Color repNeutralBg   = const Color(0xFF888888).withOpacity(0.15);
-  static Color repNegativeBg  = const Color(0xFFFF4040).withOpacity(0.15);
+  static Color repLegendaryBg = const Color(0xFFFFD700).withValues(alpha: 0.15);
+  static Color repExemplarBg  = const Color(0xFF4AF626).withValues(alpha: 0.15);
+  static Color repPositiveBg  = const Color(0xFF00E5FF).withValues(alpha: 0.15);
+  static Color repNeutralBg   = const Color(0xFF888888).withValues(alpha: 0.15);
+  static Color repNegativeBg  = const Color(0xFFFF4040).withValues(alpha: 0.15);
 
   // ── Plataformas (PLATFORM_CONFIG en gameData.ts) ──────────────────────────
   static const Color platformSteam = Color(0xFF1B9ED9);
@@ -152,40 +153,41 @@ abstract final class AppTextStyles {
 ThemeData buildAppTheme() {
   final ColorScheme colorScheme = ColorScheme(
     brightness: Brightness.dark,
-    primary: AppColors.sidebarPrimary,
-    onPrimary: AppColors.sidebarPrimaryForeground,
-    primaryContainer: AppColors.surface,
+    // Acento principal: Amarillo B2G
+    primary:            AppColors.accent,
+    onPrimary:          AppColors.accentForeground,
+    primaryContainer:   AppColors.surface,
     onPrimaryContainer: AppColors.foreground,
-    secondary: AppColors.surface,
-    onSecondary: AppColors.foreground,
+    secondary:          AppColors.surface,
+    onSecondary:        AppColors.foreground,
     secondaryContainer: AppColors.sidebar,
     onSecondaryContainer: AppColors.foreground,
-    tertiary: AppColors.sidebarPrimary,
-    onTertiary: AppColors.sidebarPrimaryForeground,
-    tertiaryContainer: AppColors.surface,
+    tertiary:           AppColors.accent,
+    onTertiary:         AppColors.accentForeground,
+    tertiaryContainer:  AppColors.surface,
     onTertiaryContainer: AppColors.foreground,
-    error: AppColors.destructiveForeground,
-    onError: AppColors.destructive,
-    errorContainer: AppColors.destructive,
-    onErrorContainer: AppColors.destructiveForeground,
-    surface: AppColors.card,
-    onSurface: AppColors.foreground,
+    error:              AppColors.destructiveForeground,
+    onError:            AppColors.destructive,
+    errorContainer:     AppColors.destructive,
+    onErrorContainer:   AppColors.destructiveForeground,
+    surface:            AppColors.card,
+    onSurface:          AppColors.foreground,
     surfaceContainerHighest: AppColors.surface,
-    onSurfaceVariant: AppColors.mutedForeground,
-    outline: AppColors.border,
-    outlineVariant: AppColors.ring,
-    shadow: Colors.black,
-    scrim: Colors.black,
-    inverseSurface: AppColors.primary,
-    onInverseSurface: AppColors.primaryForeground,
-    inversePrimary: AppColors.primaryForeground,
+    onSurfaceVariant:   AppColors.mutedForeground,
+    outline:            AppColors.border,
+    outlineVariant:     AppColors.ring,
+    shadow:             Colors.black,
+    scrim:              Colors.black,
+    inverseSurface:     AppColors.primary,
+    onInverseSurface:   AppColors.primaryForeground,
+    inversePrimary:     AppColors.primaryForeground,
   );
 
   return ThemeData(
     useMaterial3: true,
     brightness: Brightness.dark,
     colorScheme: colorScheme,
-    scaffoldBackgroundColor: AppColors.background,
+    scaffoldBackgroundColor: AppColors.background, // Negro puro #000000
 
     appBarTheme: AppBarTheme(
       backgroundColor: AppColors.sidebar,
@@ -199,7 +201,7 @@ ThemeData buildAppTheme() {
 
     bottomNavigationBarTheme: const BottomNavigationBarThemeData(
       backgroundColor: AppColors.sidebar,
-      selectedItemColor: AppColors.sidebarPrimary,
+      selectedItemColor: AppColors.accent,       // Ítem seleccionado: Amarillo
       unselectedItemColor: AppColors.mutedForeground,
       type: BottomNavigationBarType.fixed,
       elevation: 8,
@@ -207,16 +209,16 @@ ThemeData buildAppTheme() {
 
     navigationBarTheme: NavigationBarThemeData(
       backgroundColor: AppColors.sidebar,
-      indicatorColor: AppColors.sidebarPrimary.withOpacity(0.2),
+      indicatorColor: AppColors.accent.withValues(alpha: 0.18), // Indicador amarillo suave
       iconTheme: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return const IconThemeData(color: AppColors.sidebarPrimary);
+          return const IconThemeData(color: AppColors.accent); // Ícono activo: Amarillo
         }
         return const IconThemeData(color: AppColors.mutedForeground);
       }),
       labelTextStyle: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {
-          return AppTextStyles.labelSmall.copyWith(color: AppColors.sidebarPrimary);
+          return AppTextStyles.labelSmall.copyWith(color: AppColors.accent);
         }
         return AppTextStyles.bodyMuted;
       }),
@@ -239,8 +241,8 @@ ThemeData buildAppTheme() {
 
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.sidebarPrimary,
-        foregroundColor: AppColors.sidebarPrimaryForeground,
+        backgroundColor: AppColors.accent,           // Botón principal: Amarillo
+        foregroundColor: AppColors.accentForeground,  // Texto: Negro (contraste AAA)
         textStyle: AppTextStyles.button,
         shape: RoundedRectangleBorder(borderRadius: AppRadius.roundedMd),
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
@@ -260,7 +262,7 @@ ThemeData buildAppTheme() {
 
     textButtonTheme: TextButtonThemeData(
       style: TextButton.styleFrom(
-        foregroundColor: AppColors.sidebarPrimary,
+        foregroundColor: AppColors.accent, // TextButton: Amarillo
         textStyle: AppTextStyles.button,
       ),
     ),
@@ -271,7 +273,7 @@ ThemeData buildAppTheme() {
       hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground),
       border: OutlineInputBorder(borderRadius: AppRadius.roundedMd, borderSide: const BorderSide(color: AppColors.border)),
       enabledBorder: OutlineInputBorder(borderRadius: AppRadius.roundedMd, borderSide: const BorderSide(color: AppColors.border)),
-      focusedBorder: OutlineInputBorder(borderRadius: AppRadius.roundedMd, borderSide: const BorderSide(color: AppColors.sidebarPrimary, width: 2)),
+      focusedBorder: OutlineInputBorder(borderRadius: AppRadius.roundedMd, borderSide: const BorderSide(color: AppColors.accent, width: 2)), // Borde activo: Amarillo
       contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
     ),
 
