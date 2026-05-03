@@ -5,12 +5,18 @@
 // Configura el tema oscuro, el título y el widget raíz.
 // =============================================================================
 
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:sensors_plus/sensors_plus.dart';
 
 import 'screens/main_layout.dart';
 import 'screens/login_screen.dart';
+import 'screens/shake_selector_screen.dart';
 import 'theme/app_theme.dart';
+
+/// Key global para navegación sin contexto
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() {
   // Garantiza que los bindings de Flutter estén inicializados antes de
@@ -37,17 +43,63 @@ void main() {
 }
 
 /// Widget raíz de la aplicación Bound2Game.
-///
-/// Responsabilidades:
-/// - Inyectar el [ThemeData] oscuro generado por [buildAppTheme].
-/// - Deshabilitar el banner de depuración.
-/// - Establecer el título de la app y la pantalla inicial.
-class Bound2GameApp extends StatelessWidget {
+class Bound2GameApp extends StatefulWidget {
   const Bound2GameApp({super.key});
+
+  @override
+  State<Bound2GameApp> createState() => _Bound2GameAppState();
+}
+
+class _Bound2GameAppState extends State<Bound2GameApp> {
+  StreamSubscription<AccelerometerEvent>? _accelSub;
+  bool _isShaking = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initShakeListener();
+  }
+
+  void _initShakeListener() {
+    _accelSub = accelerometerEventStream().listen((AccelerometerEvent event) {
+      if (_isShaking) return;
+
+      // Calcular fuerza total
+      final double force = event.x.abs() + event.y.abs() + event.z.abs();
+      
+      if (force > 25) {
+        _isShaking = true;
+        
+        // Ejecutar navegación
+        if (navigatorKey.currentState != null) {
+          // Bloqueo simple: verificamos que la ruta actual no sea ya ShakeSelectorScreen
+          // (Esto se maneja empujando la ruta y esperando a que vuelva para desbloquear)
+          navigatorKey.currentState!
+              .push(MaterialPageRoute(builder: (_) => const ShakeSelectorScreen()))
+              .then((_) {
+            // Cuando el usuario cierra la pantalla de Shake to Play, rehabilitamos el sacudido
+            Future.delayed(const Duration(seconds: 1), () {
+              if (mounted) setState(() => _isShaking = false);
+            });
+          });
+        } else {
+          // Fallback por si navigatorKey no está listo
+          Future.delayed(const Duration(seconds: 1), () => _isShaking = false);
+        }
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _accelSub?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       // ── Metadatos ────────────────────────────────────────────────────────
       title: 'Bound2Game',
       debugShowCheckedModeBanner: false,

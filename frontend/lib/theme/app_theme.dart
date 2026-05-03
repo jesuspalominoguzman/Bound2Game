@@ -190,25 +190,32 @@ ThemeData buildAppTheme() {
     scaffoldBackgroundColor: AppColors.background, // Negro puro #000000
 
     appBarTheme: AppBarTheme(
-      backgroundColor: AppColors.sidebar,
+      backgroundColor: const Color(0xFF292929),
+      surfaceTintColor: Colors.transparent, // Evita cambio de color al hacer scroll
       foregroundColor: AppColors.foreground,
       elevation: 0,
+      scrolledUnderElevation: 8.0,
+      shadowColor: Colors.black.withValues(alpha: 0.6),
       centerTitle: false,
       titleTextStyle: AppTextStyles.h3,
       systemOverlayStyle: SystemUiOverlayStyle.light,
       iconTheme: const IconThemeData(color: AppColors.foreground),
     ),
 
-    bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-      backgroundColor: AppColors.sidebar,
+    bottomNavigationBarTheme: BottomNavigationBarThemeData(
+      backgroundColor: const Color(0xFF292929),
       selectedItemColor: AppColors.accent,       // Ítem seleccionado: Amarillo
       unselectedItemColor: AppColors.mutedForeground,
       type: BottomNavigationBarType.fixed,
-      elevation: 8,
+      elevation: 12,
+      // Aplicamos sombra para mantener la coherencia de "deslizamiento"
     ),
 
     navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: AppColors.sidebar,
+      backgroundColor: const Color(0xFF292929),
+      surfaceTintColor: Colors.transparent,
+      elevation: 12,
+      shadowColor: Colors.black.withValues(alpha: 0.6),
       indicatorColor: AppColors.accent.withValues(alpha: 0.18), // Indicador amarillo suave
       iconTheme: WidgetStateProperty.resolveWith((states) {
         if (states.contains(WidgetState.selected)) {

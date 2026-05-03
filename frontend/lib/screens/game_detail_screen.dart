@@ -10,19 +10,20 @@ import '../widgets/platform_badge.dart';
 import '../widgets/pc_req_dot.dart';
 import '../widgets/discount_badge.dart';
 
-// ── Color tokens ─────────────────────────────────────────────────────────────
-const _bg      = Color(0xFF101010);
-const _bgCard  = Color(0xFF181818);
-const _bgCard2 = Color(0xFF1C1C1C);
-const _border  = Color(0xFF252525);
-const _textMain  = Color(0xFFD1D1D1);
+// ── Color tokens (tema definitivo #292929/#1A1A1A/#FFB800) ──────────────────
+const _bg      = Color(0xFF292929);
+const _bgCard  = Color(0xFF1A1A1A);
+const _bgCard2 = Color(0xFF222222);
+const _border  = Color(0xFF2A2A2A);
+const _textMain  = Color(0xFFE0E0E0);
 const _textMuted = Color(0xFF555555);
 const _textSub   = Color(0xFF888888);
-const _cyan    = Color(0xFF00E5FF);
-const _green   = Color(0xFF4AF626);
 const _yellow  = Color(0xFFFFB800);
+const _green   = Color(0xFF4AF626);
 const _red     = Color(0xFFFF4040);
 const _purple  = Color(0xFF7B61FF);
+// _cyan se mantiene solo donde se referencia en módulos legacy
+const _cyan    = Color(0xFF00E5FF);
 
 // =============================================================================
 // HELPERS — cálculos de negocio (sin hardcoding; listos para backend)
@@ -69,9 +70,51 @@ class GameDetailScreen extends StatefulWidget {
 }
 
 class _GameDetailScreenState extends State<GameDetailScreen> {
-  bool _isFavorite = false;
+  /// ¿El usuario tiene este juego en su biblioteca?
+  /// TODO(backend): Leer de LibraryService.isOwned(game.id).
+  /// En mock: cualquier juego de sampleGames con playtime > 0 se considera "poseído".
+  bool get _isOwned => widget.game.playtime > 0;
+
+  /// Estado del corazón (Lista de Deseados).
+  /// Se desmarca automáticamente si _isOwned pasa a true.
+  bool _isInWishlist = false;
 
   Game get g => widget.game;
+
+  /// Intenta añadir/quitar el juego de la Lista de Deseados.
+  /// Si el juego ya está en la biblioteca, muestra un snackbar informativo.
+  void _toggleWishlist() {
+    if (_isOwned) {
+      // Regla de negocio: no se puede desear algo que ya posees
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+            'Este juego ya se encuentra en tu biblioteca',
+            style: TextStyle(
+              color: _yellow,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          backgroundColor: _bgCard,
+          behavior: SnackBarBehavior.floating,
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+            side: const BorderSide(color: _border),
+          ),
+          duration: const Duration(seconds: 3),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isInWishlist = !_isInWishlist;
+      // Si tras marcar deseado el juego ya está en biblioteca, desmarcamos
+      if (_isOwned && _isInWishlist) _isInWishlist = false;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -83,8 +126,9 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
           // ── SliverAppBar con imagen Hero ─────────────────────────────────
           _GameSliverAppBar(
             game: g,
-            isFavorite: _isFavorite,
-            onFavoriteToggle: () => setState(() => _isFavorite = !_isFavorite),
+            isInWishlist: _isInWishlist,
+            isOwned:      _isOwned,
+            onWishlistToggle: _toggleWishlist,
           ),
 
           // ── Cuerpo de la pantalla ────────────────────────────────────────
@@ -139,16 +183,31 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
 class _GameSliverAppBar extends StatelessWidget {
   const _GameSliverAppBar({
     required this.game,
-    required this.isFavorite,
-    required this.onFavoriteToggle,
+    required this.isInWishlist,
+    required this.isOwned,
+    required this.onWishlistToggle,
   });
 
   final Game game;
-  final bool isFavorite;
-  final VoidCallback onFavoriteToggle;
+  final bool isInWishlist;
+  final bool isOwned;
+  final VoidCallback onWishlistToggle;
 
   @override
   Widget build(BuildContext context) {
+    // El corazón es amarillo si está en wishlist, gris si no.
+    // Si el juego ya es de la biblioteca, el corazón usa el color de
+    // "ya en biblioteca" (amarillo tenue) para indicar el estado.
+    final heartColor = isOwned
+        ? _yellow.withValues(alpha: 0.45)   // en biblioteca: tenue
+        : isInWishlist
+            ? _yellow                        // deseado activo
+            : Colors.white;
+
+    final heartIcon = (isOwned || isInWishlist)
+        ? Icons.favorite_rounded
+        : Icons.favorite_border_rounded;
+
     return SliverAppBar(
       expandedHeight: 260,
       pinned: true,
@@ -166,7 +225,7 @@ class _GameSliverAppBar extends StatelessWidget {
       ),
       actions: [
         GestureDetector(
-          onTap: onFavoriteToggle,
+          onTap: onWishlistToggle,
           child: Container(
             margin: const EdgeInsets.all(8),
             padding: const EdgeInsets.all(6),
@@ -174,11 +233,7 @@ class _GameSliverAppBar extends StatelessWidget {
               color: Colors.black.withValues(alpha: 0.5),
               shape: BoxShape.circle,
             ),
-            child: Icon(
-              isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-              color: isFavorite ? _red : Colors.white,
-              size: 20,
-            ),
+            child: Icon(heartIcon, color: heartColor, size: 20),
           ),
         ),
         const SizedBox(width: 4),
@@ -204,7 +259,7 @@ class _GameSliverAppBar extends StatelessWidget {
               child: Image.network(
                 game.cover,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, _) => Container(
+                errorBuilder: (context, error, stackTrace) => Container(
                   color: _bgCard2,
                   child: const Icon(Icons.sports_esports_rounded,
                       color: _border, size: 60),

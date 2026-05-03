@@ -1,49 +1,31 @@
+// =============================================================================
 // shake_selector_screen.dart — Bound2Game Flutter
+//
+// Refactorización:
+// - Paleta unificada: #292929 / #1A1A1A / #FFB800.
+// - Usa AdvancedFiltersModal para configurar filtros.
+// - Animación con shuffle() para que no sea repetitiva, asegurando
+//   que el último frame coincide con el resultado.
+// =============================================================================
+
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+
 import '../models/game_model.dart';
+import '../widgets/advanced_filters_modal.dart';
 import 'game_detail_screen.dart';
 
-const _bg     = Color(0xFF101010);
-const _bgCard = Color(0xFF181818);
-const _bgCard2 = Color(0xFF1C1C1C);
-const _border  = Color(0xFF252525);
-const _textMain  = Color(0xFFD1D1D1);
-const _textMuted = Color(0xFF555555);
-const _textSub   = Color(0xFF888888);
-const _cyan   = Color(0xFF00E5FF);
-const _green  = Color(0xFF4AF626);
-const _yellow = Color(0xFFFFB800);
-const _purple = Color(0xFF7B61FF);
-
-// ── Filter model ─────────────────────────────────────────────────────────────
-
-enum _DurationFilter { any, short, medium, long }
-enum _ModeFilter     { any, singleplayer, multiplayer }
-
-extension _DurationLabel on _DurationFilter {
-  String get label {
-    switch (this) {
-      case _DurationFilter.any:    return 'Me da igual';
-      case _DurationFilter.short:  return '< 10h';
-      case _DurationFilter.medium: return '10–40h';
-      case _DurationFilter.long:   return '> 40h';
-    }
-  }
-}
-
-extension _ModeLabel on _ModeFilter {
-  String get label {
-    switch (this) {
-      case _ModeFilter.any:          return 'Me da igual';
-      case _ModeFilter.singleplayer: return 'Singleplayer';
-      case _ModeFilter.multiplayer:  return 'Multiplayer';
-    }
-  }
-}
+// ── Paleta del tema definitivo ─────────────────────────────────────────────────
+const _kBg      = Color(0xFF292929);
+const _kBgCard  = Color(0xFF1A1A1A);
+const _kBorder  = Color(0xFF2A2A2A);
+const _kYellow  = Color(0xFFFFB800);
+const _kWhite   = Color(0xFFFFFFFF);
+const _kMuted   = Color(0xFF888888);
+const _kSub     = Color(0xFF555555);
 
 // ── State phases ─────────────────────────────────────────────────────────────
-
 enum _Phase { filters, spinning, result }
 
 // =============================================================================
@@ -61,10 +43,7 @@ class _ShakeSelectorScreenState extends State<ShakeSelectorScreen>
     with TickerProviderStateMixin {
 
   // ── Filter state ───────────────────────────────────────────────────────────
-  final Set<GameStatus> _statusFilter = {};
-  final Set<String>     _genreFilter  = {};
-  _DurationFilter _durationFilter = _DurationFilter.any;
-  _ModeFilter     _modeFilter     = _ModeFilter.any;
+  LibraryFilters _filters = const LibraryFilters();
 
   // ── Phase & result ─────────────────────────────────────────────────────────
   _Phase _phase = _Phase.filters;
@@ -76,6 +55,7 @@ class _ShakeSelectorScreenState extends State<ShakeSelectorScreen>
   int _spinIndex = 0;
   List<Game> _spinPool = [];
   int _targetIndex = 0;
+  final int _totalSteps = 60; // Pasos virtuales de la animación
 
   @override
   void initState() {
@@ -97,39 +77,29 @@ class _ShakeSelectorScreenState extends State<ShakeSelectorScreen>
 
   // ── Filtered pool ──────────────────────────────────────────────────────────
   List<Game> get _filtered {
-    // TODO(backend): GET /api/library/random?status=...&genre=...&duration=...
-    return sampleGames.where((g) {
-      if (_statusFilter.isNotEmpty && !_statusFilter.contains(g.status)) {
-        return false;
-      }
-      if (_genreFilter.isNotEmpty && !_genreFilter.contains(g.genre)) {
-        return false;
-      }
-      if (_durationFilter != _DurationFilter.any && g.hltb != null) {
-        final h = g.hltb!.main ?? g.hltb!.extra ?? 0;
-        if (_durationFilter == _DurationFilter.short  && h >= 10)  return false;
-        if (_durationFilter == _DurationFilter.medium && (h < 10 || h > 40)) return false;
-        if (_durationFilter == _DurationFilter.long   && h <= 40)  return false;
-      }
-      if (_modeFilter == _ModeFilter.singleplayer) {
-        if (g.hltb == null || (g.hltb!.main ?? 0) == 0) return false;
-      }
-      if (_modeFilter == _ModeFilter.multiplayer) {
-        if (g.hltb != null && (g.hltb!.main ?? 0) > 0) return false;
-      }
-      return true;
-    }).toList();
+    return _filters.apply(sampleGames);
   }
 
   // ── Unique genres in pool ──────────────────────────────────────────────────
   List<String> get _genres =>
       sampleGames.map((g) => g.genre).toSet().toList()..sort();
 
+  // ── Configurar filtros (abre AdvancedFiltersModal) ─────────────────────────
+  Future<void> _openFilters() async {
+    final result = await showAdvancedFilters(
+      context: context,
+      current: _filters,
+      availableGenres: _genres,
+    );
+    if (result != null) {
+      setState(() => _filters = result);
+    }
+  }
+
   // ── Spin logic ─────────────────────────────────────────────────────────────
   void _onSpinTick() {
     if (_spinPool.isEmpty) return;
-    const totalSteps = 60; // virtual steps across the animation
-    final step = (_spinAnim.value * totalSteps).floor();
+    final step = (_spinAnim.value * _totalSteps).floor();
     setState(() => _spinIndex = step % _spinPool.length);
   }
 
@@ -143,23 +113,33 @@ class _ShakeSelectorScreenState extends State<ShakeSelectorScreen>
   }
 
   void _startSpin() {
-    final pool = _filtered;
+    final pool = _filtered.toList();
     if (pool.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Ningún juego coincide con los filtros'),
-          backgroundColor: _bgCard,
+          content: Text(
+            'Ningún juego coincide con los filtros',
+            style: GoogleFonts.inter(color: _kYellow, fontWeight: FontWeight.w600, fontSize: 13),
+          ),
+          backgroundColor: _kBgCard,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(10),
-            side: const BorderSide(color: _border),
+            side: const BorderSide(color: _kBorder),
           ),
         ),
       );
       return;
     }
-    _spinPool    = pool;
-    _targetIndex = Random().nextInt(pool.length);
+
+    // Barajamos aleatoriamente la lista de carátulas para que la animación no sea repetitiva
+    pool.shuffle(Random());
+    _spinPool = pool;
+    
+    // Al finalizar la animación (_spinAnim.value == 1.0), el índice calculado será (_totalSteps % pool.length).
+    // Guardamos ese índice para garantizar que _result sea el último frame visualizado.
+    _targetIndex = _totalSteps % _spinPool.length;
+    
     _spinCtrl.reset();
     setState(() { _phase = _Phase.spinning; _result = null; });
     _spinCtrl.forward();
@@ -174,49 +154,37 @@ class _ShakeSelectorScreenState extends State<ShakeSelectorScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: _bg,
+      backgroundColor: _kBg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF151515),
+        backgroundColor: _kBgCard,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          icon: const Icon(Icons.arrow_back_rounded, color: _kWhite),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: Row(
           children: [
-            const Icon(Icons.casino_rounded, color: _cyan, size: 18),
+            const Icon(Icons.casino_rounded, color: _kYellow, size: 18),
             const SizedBox(width: 8),
-            const Text('Selector Inteligente',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700,
-                    color: Colors.white)),
+            Text(
+              'Selección Aleatoria',
+              style: GoogleFonts.inter(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: _kWhite,
+              ),
+            ),
           ],
         ),
         elevation: 0,
+        shape: const Border(bottom: BorderSide(color: _kBorder)),
       ),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 400),
         child: _phase == _Phase.filters
             ? _FiltersView(
                 key: const ValueKey('filters'),
-                statusFilter:   _statusFilter,
-                genreFilter:    _genreFilter,
-                genres:         _genres,
-                durationFilter: _durationFilter,
-                modeFilter:     _modeFilter,
-                poolCount:      _filtered.length,
-                onStatusToggle: (s) => setState(() {
-                  _statusFilter.contains(s)
-                      ? _statusFilter.remove(s)
-                      : _statusFilter.add(s);
-                }),
-                onGenreToggle: (g) => setState(() {
-                  _genreFilter.contains(g)
-                      ? _genreFilter.remove(g)
-                      : _genreFilter.add(g);
-                }),
-                onDurationChanged: (d) =>
-                    setState(() => _durationFilter = d),
-                onModeChanged: (m) =>
-                    setState(() => _modeFilter = m),
+                poolCount: _filtered.length,
+                onConfigure: _openFilters,
                 onSpin: _startSpin,
               )
             : _phase == _Phase.spinning
@@ -242,205 +210,158 @@ class _ShakeSelectorScreenState extends State<ShakeSelectorScreen>
 }
 
 // =============================================================================
-// _FiltersView
+// _FiltersView — Configuración inicial
 // =============================================================================
 
 class _FiltersView extends StatelessWidget {
   const _FiltersView({
     super.key,
-    required this.statusFilter,
-    required this.genreFilter,
-    required this.genres,
-    required this.durationFilter,
-    required this.modeFilter,
     required this.poolCount,
-    required this.onStatusToggle,
-    required this.onGenreToggle,
-    required this.onDurationChanged,
-    required this.onModeChanged,
+    required this.onConfigure,
     required this.onSpin,
   });
 
-  final Set<GameStatus>    statusFilter;
-  final Set<String>        genreFilter;
-  final List<String>       genres;
-  final _DurationFilter    durationFilter;
-  final _ModeFilter        modeFilter;
-  final int                poolCount;
-  final ValueChanged<GameStatus>      onStatusToggle;
-  final ValueChanged<String>          onGenreToggle;
-  final ValueChanged<_DurationFilter> onDurationChanged;
-  final ValueChanged<_ModeFilter>     onModeChanged;
+  final int poolCount;
+  final VoidCallback onConfigure;
   final VoidCallback onSpin;
 
   @override
   Widget build(BuildContext context) {
-    return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
-      slivers: [
-        const SliverToBoxAdapter(child: SizedBox(height: 20)),
-
-        // ── Estado ────────────────────────────────────────────────────────────
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _FilterSection(
-              title: 'Estado',
-              icon: Icons.flag_rounded,
-              child: Wrap(
-                spacing: 8,
-                children: GameStatus.values.map((s) {
-                  final sel = statusFilter.contains(s);
-                  return _FilterChip(
-                    label: s.label,
-                    isSelected: sel,
-                    color: s.color,
-                    onTap: () => onStatusToggle(s),
-                  );
-                }).toList(),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Icono ilustrativo
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: _kBgCard,
+                shape: BoxShape.circle,
+                border: Border.all(color: _kBorder),
               ),
+              child: const Icon(Icons.touch_app_rounded, color: _kYellow, size: 48),
             ),
-          ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            const SizedBox(height: 32),
 
-        // ── Género ────────────────────────────────────────────────────────────
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _FilterSection(
-              title: 'Género',
-              icon: Icons.category_rounded,
-              child: Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: genres.map((g) {
-                  final sel = genreFilter.contains(g);
-                  return _FilterChip(
-                    label: g,
-                    isSelected: sel,
-                    color: _purple,
-                    onTap: () => onGenreToggle(g),
-                  );
-                }).toList(),
+            // Título principal
+            Text(
+              '¿No sabes a qué jugar?',
+              style: GoogleFonts.inter(
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
+                color: _kWhite,
               ),
+              textAlign: TextAlign.center,
             ),
-          ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 12)),
+            const SizedBox(height: 12),
+            Text(
+              'Configura tus filtros o déjalo todo al azar.\nAgita tu teléfono o presiona el botón para elegir tu próxima aventura.',
+              style: GoogleFonts.inter(fontSize: 13, color: _kMuted, height: 1.5),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 48),
 
-        // ── Duración ─────────────────────────────────────────────────────────
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _FilterSection(
-              title: 'Duración (HLTB)',
-              icon: Icons.timer_rounded,
-              child: Wrap(
-                spacing: 8,
-                children: _DurationFilter.values.map((d) {
-                  return _FilterChip(
-                    label: d.label,
-                    isSelected: durationFilter == d,
-                    color: _yellow,
-                    onTap: () => onDurationChanged(d),
-                  );
-                }).toList(),
+            // Contador y Botón de filtros
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _kBgCard,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: _kBorder),
               ),
-            ),
-          ),
-        ),
-        const SliverToBoxAdapter(child: SizedBox(height: 12)),
-
-        // ── Modo ──────────────────────────────────────────────────────────────
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: _FilterSection(
-              title: 'Modo de juego',
-              icon: Icons.people_rounded,
-              child: Wrap(
-                spacing: 8,
-                children: _ModeFilter.values.map((m) {
-                  return _FilterChip(
-                    label: m.label,
-                    isSelected: modeFilter == m,
-                    color: _cyan,
-                    onTap: () => onModeChanged(m),
-                  );
-                }).toList(),
-              ),
-            ),
-          ),
-        ),
-
-        // ── Botón principal ───────────────────────────────────────────────────
-        SliverToBoxAdapter(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 32, 16, 100),
-            child: Column(
-              children: [
-                // Contador de juegos que coinciden
-                Text(
-                  '$poolCount ${poolCount == 1 ? 'juego coincide' : 'juegos coinciden'} con tus filtros',
-                  style: const TextStyle(fontSize: 12, color: _textSub),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                // Botón grande
-                GestureDetector(
-                  onTap: onSpin,
-                  child: Container(
-                    width: double.infinity,
-                    height: 64,
-                    decoration: BoxDecoration(
-                      gradient: poolCount > 0
-                          ? const LinearGradient(
-                              colors: [Color(0xFF00E5FF), Color(0xFF7B61FF)],
-                            )
-                          : null,
-                      color: poolCount == 0 ? _bgCard2 : null,
-                      borderRadius: BorderRadius.circular(18),
-                      boxShadow: poolCount > 0
-                          ? [
-                              BoxShadow(
-                                color: _cyan.withValues(alpha: 0.3),
-                                blurRadius: 20,
-                                offset: const Offset(0, 6),
-                              )
-                            ]
-                          : null,
-                      border: poolCount == 0
-                          ? Border.all(color: _border)
-                          : null,
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(
-                          Icons.auto_awesome_rounded,
-                          color: poolCount > 0 ? Colors.black : _textMuted,
-                          size: 22,
-                        ),
-                        const SizedBox(width: 10),
                         Text(
-                          '¡SORPRÉNDEME!',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w900,
-                            color: poolCount > 0 ? Colors.black : _textMuted,
-                            letterSpacing: 1,
-                          ),
+                          'Juegos disponibles',
+                          style: GoogleFonts.inter(fontSize: 11, color: _kSub, fontWeight: FontWeight.w600),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          poolCount.toString(),
+                          style: GoogleFonts.inter(fontSize: 24, color: _kWhite, fontWeight: FontWeight.w800),
                         ),
                       ],
                     ),
                   ),
-                ),
-              ],
+                  OutlinedButton.icon(
+                    onPressed: onConfigure,
+                    icon: const Icon(Icons.tune_rounded, size: 16),
+                    label: Text(
+                      'Filtros',
+                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _kYellow,
+                      side: const BorderSide(color: _kBorder),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+            const SizedBox(height: 32),
+
+            // Botón grande
+            GestureDetector(
+              onTap: onSpin,
+              child: Container(
+                width: double.infinity,
+                height: 64,
+                decoration: BoxDecoration(
+                  gradient: poolCount > 0
+                      ? LinearGradient(
+                          colors: [_kYellow, _kYellow.withValues(alpha: 0.75)],
+                        )
+                      : null,
+                  color: poolCount == 0 ? _kBgCard : null,
+                  borderRadius: BorderRadius.circular(18),
+                  boxShadow: poolCount > 0
+                      ? [
+                          BoxShadow(
+                            color: _kYellow.withValues(alpha: 0.35),
+                            blurRadius: 20,
+                            offset: const Offset(0, 6),
+                          )
+                        ]
+                      : null,
+                  border: poolCount == 0
+                      ? Border.all(color: _kBorder)
+                      : null,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.auto_awesome_rounded,
+                      color: poolCount > 0 ? Colors.black : _kMuted,
+                      size: 22,
+                    ),
+                    const SizedBox(width: 10),
+                    Text(
+                      'Selección Aleatoria',
+                      style: GoogleFonts.inter(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
+                        color: poolCount > 0 ? Colors.black : _kMuted,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
@@ -469,9 +390,9 @@ class _SpinView extends StatelessWidget {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        const Text(
+        Text(
           'Buscando tu próximo juego...',
-          style: TextStyle(fontSize: 14, color: _textSub),
+          style: GoogleFonts.inter(fontSize: 14, color: _kMuted, fontWeight: FontWeight.w500),
         ),
         const SizedBox(height: 32),
 
@@ -513,18 +434,19 @@ class _SpinView extends StatelessWidget {
               children: [
                 LinearProgressIndicator(
                   value: animation.value,
-                  backgroundColor: _border,
+                  backgroundColor: _kBorder,
                   valueColor: AlwaysStoppedAnimation<Color>(
-                    Color.lerp(_cyan, _green, animation.value)!,
+                    Color.lerp(_kYellow.withValues(alpha: 0.5), _kYellow, animation.value)!,
                   ),
-                  minHeight: 3,
+                  minHeight: 4,
+                  borderRadius: BorderRadius.circular(2),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 12),
                 Text(
                   animation.value < 0.5
                       ? 'Barajando...'
                       : 'Casi...',
-                  style: const TextStyle(fontSize: 11, color: _textMuted),
+                  style: GoogleFonts.inter(fontSize: 11, color: _kMuted, fontWeight: FontWeight.w600),
                 ),
               ],
             ),
@@ -551,7 +473,7 @@ class _SpinCard extends StatelessWidget {
           height: 240,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: _border, width: 2),
+            border: Border.all(color: _kBorder, width: 1.5),
             boxShadow: [
               BoxShadow(
                 color: Colors.black.withValues(alpha: 0.4),
@@ -569,9 +491,9 @@ class _SpinCard extends StatelessWidget {
                   game.cover,
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, _) => Container(
-                    color: _bgCard2,
+                    color: _kBgCard,
                     child: const Icon(Icons.sports_esports_rounded,
-                        color: _border, size: 48),
+                        color: _kBorder, size: 48),
                   ),
                 ),
                 // Gradient overlay with title
@@ -580,7 +502,7 @@ class _SpinCard extends StatelessWidget {
                   left: 0,
                   right: 0,
                   child: Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(12),
                     decoration: const BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.bottomCenter,
@@ -590,8 +512,8 @@ class _SpinCard extends StatelessWidget {
                     ),
                     child: Text(
                       game.title,
-                      style: const TextStyle(
-                        fontSize: 11,
+                      style: GoogleFonts.inter(
+                        fontSize: 12,
                         fontWeight: FontWeight.w700,
                         color: Colors.white,
                       ),
@@ -636,17 +558,17 @@ class _ResultView extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
             decoration: BoxDecoration(
-              color: _green.withValues(alpha: 0.1),
+              color: _kYellow.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: _green.withValues(alpha: 0.3)),
+              border: Border.all(color: _kYellow.withValues(alpha: 0.3)),
             ),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.auto_awesome_rounded, size: 13, color: _green),
-                SizedBox(width: 6),
+                const Icon(Icons.auto_awesome_rounded, size: 13, color: _kYellow),
+                const SizedBox(width: 6),
                 Text('¡Tu próximo juego es!',
-                    style: TextStyle(fontSize: 12, color: _green,
+                    style: GoogleFonts.inter(fontSize: 12, color: _kYellow,
                         fontWeight: FontWeight.w700)),
               ],
             ),
@@ -661,7 +583,7 @@ class _ResultView extends StatelessWidget {
               borderRadius: BorderRadius.circular(18),
               boxShadow: [
                 BoxShadow(
-                  color: _cyan.withValues(alpha: 0.25),
+                  color: _kYellow.withValues(alpha: 0.15),
                   blurRadius: 30,
                   offset: const Offset(0, 12),
                 ),
@@ -673,9 +595,9 @@ class _ResultView extends StatelessWidget {
                 game.cover,
                 fit: BoxFit.cover,
                 errorBuilder: (context, error, _) => Container(
-                  color: _bgCard2,
+                  color: _kBgCard,
                   child: const Icon(Icons.sports_esports_rounded,
-                      color: _border, size: 60),
+                      color: _kBorder, size: 60),
                 ),
               ),
             ),
@@ -685,7 +607,7 @@ class _ResultView extends StatelessWidget {
           // Título
           Text(
             game.title,
-            style: const TextStyle(
+            style: GoogleFonts.inter(
               fontSize: 22,
               fontWeight: FontWeight.w800,
               color: Colors.white,
@@ -699,20 +621,20 @@ class _ResultView extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(game.genre,
-                  style: const TextStyle(fontSize: 12, color: _textSub)),
-              const Text('  ·  ',
-                  style: TextStyle(fontSize: 12, color: _textMuted)),
+                  style: GoogleFonts.inter(fontSize: 12, color: _kMuted)),
+              Text('  ·  ',
+                  style: GoogleFonts.inter(fontSize: 12, color: _kBorder)),
               Text(game.platform.displayName,
-                  style: const TextStyle(fontSize: 12, color: _textSub)),
+                  style: GoogleFonts.inter(fontSize: 12, color: _kMuted)),
               if (game.hltb?.main != null) ...[
-                const Text('  ·  ',
-                    style: TextStyle(fontSize: 12, color: _textMuted)),
+                Text('  ·  ',
+                    style: GoogleFonts.inter(fontSize: 12, color: _kBorder)),
                 Text('~${game.hltb!.main}h',
-                    style: const TextStyle(fontSize: 12, color: _cyan)),
+                    style: GoogleFonts.inter(fontSize: 12, color: _kWhite, fontWeight: FontWeight.w600)),
               ],
             ],
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 40),
 
           // Botones de acción
           Row(
@@ -721,11 +643,11 @@ class _ResultView extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: onRetry,
                   icon: const Icon(Icons.refresh_rounded, size: 16),
-                  label: const Text('Otro juego',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  label: Text('Otro juego',
+                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w600)),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: _textSub,
-                    side: const BorderSide(color: _border),
+                    foregroundColor: _kWhite,
+                    side: const BorderSide(color: _kBorder),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
@@ -738,10 +660,10 @@ class _ResultView extends StatelessWidget {
                 child: ElevatedButton.icon(
                   onPressed: onDetail,
                   icon: const Icon(Icons.info_rounded, size: 16),
-                  label: const Text('Ver Detalles',
-                      style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
+                  label: Text('Ver Detalles',
+                      style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700)),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _cyan,
+                    backgroundColor: _kYellow,
                     foregroundColor: Colors.black,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
@@ -753,86 +675,6 @@ class _ResultView extends StatelessWidget {
             ],
           ),
         ],
-      ),
-    );
-  }
-}
-
-// =============================================================================
-// Shared sub-widgets
-// =============================================================================
-
-class _FilterSection extends StatelessWidget {
-  const _FilterSection({required this.title, required this.icon, required this.child});
-  final String   title;
-  final IconData icon;
-  final Widget   child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _bgCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, size: 14, color: _cyan),
-              const SizedBox(width: 6),
-              Text(title,
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700,
-                      color: _textMain)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          child,
-        ],
-      ),
-    );
-  }
-}
-
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
-    required this.label,
-    required this.isSelected,
-    required this.color,
-    required this.onTap,
-  });
-  final String   label;
-  final bool     isSelected;
-  final Color    color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        margin: const EdgeInsets.only(bottom: 4),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: BoxDecoration(
-          color: isSelected ? color.withValues(alpha: 0.15) : _bgCard2,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected ? color.withValues(alpha: 0.5) : _border,
-            width: isSelected ? 1.5 : 1,
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            color: isSelected ? color : _textSub,
-          ),
-        ),
       ),
     );
   }

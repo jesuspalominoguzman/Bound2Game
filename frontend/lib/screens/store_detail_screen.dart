@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../models/deal_model.dart';
 import '../models/game_model.dart';
 import '../widgets/discount_badge.dart';
+import '../widgets/advanced_filters_modal.dart';
 import 'game_detail_screen.dart';
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
@@ -48,11 +49,6 @@ Game _resolveGame(GameDeal deal) => sampleGames.firstWhere(
   orElse: () => _dealToGame(deal),
 );
 
-// ── Constantes de filtro ──────────────────────────────────────────────────────
-
-const _priceLabels = ['Todos', '<10 €', '<20 €', '<40 €'];
-const _modeLabels  = ['Todos', 'Single Player', 'Multijugador'];
-
 // =============================================================================
 // StoreDetailScreen
 // =============================================================================
@@ -66,9 +62,7 @@ class StoreDetailScreen extends StatefulWidget {
 }
 
 class _StoreDetailScreenState extends State<StoreDetailScreen> {
-  int _priceIdx = 0;
-  String? _genreFilter;
-  int _modeIdx = 0;
+  LibraryFilters _filters = const LibraryFilters(priceEnabled: false);
 
   DealStore get _store => widget.store;
   DealStoreConfig get _cfg => _store.config;
@@ -80,16 +74,22 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
       if (d.store != _store) return false;
 
       // Precio
-      if (_priceIdx == 1 && d.salePrice >= 10)  return false;
-      if (_priceIdx == 2 && d.salePrice >= 20)  return false;
-      if (_priceIdx == 3 && d.salePrice >= 40)  return false;
+      if (_filters.priceEnabled && d.salePrice > _filters.maxPrice) return false;
 
       // Género
-      if (_genreFilter != null && d.genre != _genreFilter) return false;
+      if (_filters.genreEnabled && _filters.genres.isNotEmpty) {
+        if (d.genre == null) return false;
+        if (!_filters.genres.any((g) => d.genre!.toLowerCase().contains(g.toLowerCase()))) return false;
+      }
 
       // Modo
-      if (_modeIdx == 1 && d.playerMode == PlayerMode.multi)  return false;
-      if (_modeIdx == 2 && d.playerMode == PlayerMode.solo)   return false;
+      if (_filters.modalityEnabled && _filters.modalities.isNotEmpty) {
+        final wantsMulti = _filters.modalities.contains(FilterModality.multi);
+        final wantsSingle = _filters.modalities.contains(FilterModality.single);
+        final isMulti = d.playerMode == PlayerMode.multi;
+        if (wantsMulti && !isMulti) return false;
+        if (wantsSingle && isMulti) return false;
+      }
 
       return true;
     }).toList()
@@ -121,6 +121,22 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
             pinned: true,
             expandedHeight: 130,
             backgroundColor: _bg,
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.filter_list_rounded, color: Colors.white),
+                onPressed: () async {
+                  final result = await showAdvancedFilters(
+                    context: context,
+                    current: _filters,
+                    availableGenres: _availableGenres,
+                    showPriceFilter: true,
+                  );
+                  if (result != null) {
+                    setState(() => _filters = result);
+                  }
+                },
+              ),
+            ],
             leading: GestureDetector(
               onTap: () => Navigator.of(context).pop(),
               child: Container(
@@ -182,20 +198,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
             ),
           ),
 
-          // ── Barra de filtros (sticky) ────────────────────────────────────
-          SliverPersistentHeader(
-            pinned: true,
-            delegate: _FilterBarDelegate(
-              priceIdx: _priceIdx,
-              modeIdx: _modeIdx,
-              genreFilter: _genreFilter,
-              availableGenres: _availableGenres,
-              storeColor: _cfg.color,
-              onPriceChanged: (i) => setState(() => _priceIdx = i),
-              onModeChanged: (i) => setState(() => _modeIdx = i),
-              onGenreChanged: (g) => setState(() => _genreFilter = g),
-            ),
-          ),
+          // (Se eliminó _FilterBarDelegate a favor de AdvancedFiltersModal)
 
           // ── Grid de juegos ───────────────────────────────────────────────
           if (deals.isEmpty)
@@ -243,148 +246,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
   }
 }
 
-// =============================================================================
-// _FilterBarDelegate — SliverPersistentHeader con chips de filtro
-// =============================================================================
-
-class _FilterBarDelegate extends SliverPersistentHeaderDelegate {
-  final int priceIdx;
-  final int modeIdx;
-  final String? genreFilter;
-  final List<String> availableGenres;
-  final Color storeColor;
-  final ValueChanged<int> onPriceChanged;
-  final ValueChanged<int> onModeChanged;
-  final ValueChanged<String?> onGenreChanged;
-
-  const _FilterBarDelegate({
-    required this.priceIdx,
-    required this.modeIdx,
-    required this.genreFilter,
-    required this.availableGenres,
-    required this.storeColor,
-    required this.onPriceChanged,
-    required this.onModeChanged,
-    required this.onGenreChanged,
-  });
-
-  @override double get minExtent => 100;
-  @override double get maxExtent => 100;
-
-  @override
-  Widget build(BuildContext ctx, double shrinkOffset, bool overlapsContent) {
-    return Container(
-      color: const Color(0xFF131313),
-      child: Column(
-        children: [
-          // Fila 1: Precio + Modo
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-            child: Row(
-              children: [
-                _FilterLabel(label: 'Precio:'),
-                ...List.generate(_priceLabels.length, (i) => _FilterChip(
-                  label: _priceLabels[i],
-                  active: priceIdx == i,
-                  color: storeColor,
-                  onTap: () => onPriceChanged(i),
-                )),
-                const SizedBox(width: 12),
-                _FilterLabel(label: 'Modo:'),
-                ...List.generate(_modeLabels.length, (i) => _FilterChip(
-                  label: _modeLabels[i],
-                  active: modeIdx == i,
-                  color: storeColor,
-                  onTap: () => onModeChanged(i),
-                )),
-              ],
-            ),
-          ),
-          // Fila 2: Géneros
-          if (availableGenres.isNotEmpty)
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
-              child: Row(
-                children: [
-                  _FilterLabel(label: 'Género:'),
-                  _FilterChip(
-                    label: 'Todos',
-                    active: genreFilter == null,
-                    color: storeColor,
-                    onTap: () => onGenreChanged(null),
-                  ),
-                  ...availableGenres.map((g) => _FilterChip(
-                    label: g,
-                    active: genreFilter == g,
-                    color: storeColor,
-                    onTap: () => onGenreChanged(genreFilter == g ? null : g),
-                  )),
-                ],
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  bool shouldRebuild(covariant _FilterBarDelegate old) =>
-      old.priceIdx != priceIdx || old.modeIdx != modeIdx ||
-      old.genreFilter != genreFilter;
-}
-
-class _FilterLabel extends StatelessWidget {
-  const _FilterLabel({required this.label});
-  final String label;
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(right: 6),
-    child: Text(label,
-        style: const TextStyle(fontSize: 10, color: Color(0xFF555555),
-            fontWeight: FontWeight.w600)),
-  );
-}
-
-class _FilterChip extends StatelessWidget {
-  const _FilterChip({
-    required this.label, required this.active,
-    required this.color, required this.onTap,
-  });
-  final String label;
-  final bool active;
-  final Color color;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        margin: const EdgeInsets.only(right: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-        decoration: BoxDecoration(
-          color: active ? color.withValues(alpha: 0.18) : const Color(0xFF1C1C1C),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: active ? color.withValues(alpha: 0.5) : const Color(0xFF252525),
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 10, fontWeight: FontWeight.w600,
-            color: active ? color : const Color(0xFF666666),
-          ),
-        ),
-      ),
-    );
-  }
-}
+// (Filtros en línea eliminados)
 
 // =============================================================================
 // _DealGridCard — Tarjeta de juego 2 columnas

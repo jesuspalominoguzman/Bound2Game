@@ -3,28 +3,29 @@
 // Fuente: InterfazdeusuarioBound2game - CORRECTO
 //   └── src/app/pages/Library.tsx
 //
-// Arquitectura:
-//   • Capa de datos: mockGames (alias de sampleGames del modelo)
-//     → Sustituir por FutureBuilder + GameService.fetchLibrary() en producción.
-//   • Estado: StatefulWidget con búsqueda y filtrado por plataforma.
-//   • Grid: GridView.builder — SliverGridDelegateWithFixedCrossAxisCount(2)
-//   • Barra de búsqueda: filtrado visual en tiempo real (sin red).
-//   • Filtros: chips de plataforma + "Todos".
+// Refactorización v2 — Tema visual definitivo #292929/#1A1A1A/#FFB800:
+//   • Eliminado título estático (lo muestra DynamicAppBar).
+//   • Barra de búsqueda Expanded + contador de juegos en Row responsive.
+//   • Filtros avanzados multi-categoría vía AdvancedFiltersModal.
+//   • Paleta unificada con el resto de la app.
 // =============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../models/game_model.dart';
 import '../widgets/game_library_card.dart';
+import '../widgets/advanced_filters_modal.dart';
 import 'game_detail_screen.dart';
 import 'shake_selector_screen.dart';
 
-// ── Constantes de color ───────────────────────────────────────────────────────
-const _bgCard    = Color(0xFF181818);
-const _border    = Color(0xFF252525);
-const _textMain  = Color(0xFFD1D1D1);
-const _textMuted = Color(0xFF555555);
-const _textSub   = Color(0xFF888888);
-const _cyan      = Color(0xFF00E5FF);
+// ── Paleta del tema definitivo ─────────────────────────────────────────────────
+const _kBg      = Color(0xFF292929);
+const _kBgCard  = Color(0xFF1A1A1A);
+const _kBorder  = Color(0xFF2A2A2A);
+const _kYellow  = Color(0xFFFFB800);
+const _kWhite   = Color(0xFFFFFFFF);
+const _kMuted   = Color(0xFF888888);
+const _kSub     = Color(0xFF555555);
 
 // =============================================================================
 // CAPA DE DATOS MOCK
@@ -35,36 +36,15 @@ const _cyan      = Color(0xFF00E5FF);
 //     return GameService.fetchLibrary(userId: currentUser.id);
 //   }
 //
-// Y envolver el GridView en un FutureBuilder:
-//
-//   FutureBuilder<List<Game>>(
-//     future: _loadGames(),
-//     builder: (context, snapshot) {
-//       if (snapshot.connectionState != ConnectionState.done)
-//         return const Center(child: CircularProgressIndicator());
-//       if (snapshot.hasError) return _ErrorView(error: snapshot.error);
-//       return _LibraryGrid(games: snapshot.data!);
-//     },
-//   );
+// Y envolver el GridView en un FutureBuilder<List<Game>>.
 // =============================================================================
 
-/// Fuente de datos mock — alias de sampleGames definido en game_model.dart.
-/// Ningún nombre de juego está hardcodeado en la UI; todo proviene de este
-/// objeto de datos.
 final List<Game> _mockGames = sampleGames;
 
 // =============================================================================
 // LIBRARY SCREEN
 // =============================================================================
 
-/// Pantalla principal de la Biblioteca de juegos.
-///
-/// Corresponde a `Library.tsx` del diseño de referencia React.
-/// Contiene:
-/// - Header con título y contador de juegos.
-/// - Barra de búsqueda con filtrado en tiempo real.
-/// - Chips de filtro por plataforma.
-/// - Grid de 2 columnas de [GameLibraryCard].
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
 
@@ -74,42 +54,91 @@ class LibraryScreen extends StatefulWidget {
 
 class _LibraryScreenState extends State<LibraryScreen>
     with SingleTickerProviderStateMixin {
-  // ── Estado de búsqueda y filtrado ─────────────────────────────────────────
-  final TextEditingController _searchCtrl = TextEditingController();
-  final FocusNode _searchFocus = FocusNode();
-  bool _isSearchFocused = false;
 
-  /// Plataforma seleccionada para filtrar. null = "Todas".
-  Platform? _selectedPlatform;
+  // ── Estado de búsqueda ────────────────────────────────────────────────────
+  final TextEditingController _searchCtrl  = TextEditingController();
+  final FocusNode             _searchFocus = FocusNode();
+  bool   _isSearchFocused = false;
+  String _searchQuery     = '';
 
-  /// Texto de búsqueda normalizado.
-  String _searchQuery = '';
+  // ── Filtros avanzados ─────────────────────────────────────────────────────
+  LibraryFilters _filters = const LibraryFilters();
 
-  // ── Datos filtrados (computed) ────────────────────────────────────────────
+  List<_FilterTag> get _activeFilterTags {
+    final tags = <_FilterTag>[];
+    if (_filters.platformEnabled) {
+      for (final p in _filters.platforms) {
+        tags.add(_FilterTag(p.displayName, () => setState(() {
+          final s = Set<Platform>.from(_filters.platforms)..remove(p);
+          _filters = _filters.copyWith(platforms: s);
+        })));
+      }
+    }
+    if (_filters.genreEnabled) {
+      for (final g in _filters.genres) {
+        tags.add(_FilterTag(g, () => setState(() {
+          final s = Set<String>.from(_filters.genres)..remove(g);
+          _filters = _filters.copyWith(genres: s);
+        })));
+      }
+    }
+    if (_filters.statusEnabled) {
+      for (final s in _filters.statuses) {
+        tags.add(_FilterTag(s.label, () => setState(() {
+          final st = Set<GameStatus>.from(_filters.statuses)..remove(s);
+          _filters = _filters.copyWith(statuses: st);
+        })));
+      }
+    }
+    if (_filters.durationEnabled) {
+      for (final d in _filters.durations) {
+        tags.add(_FilterTag(d.label, () => setState(() {
+          final s = Set<FilterDuration>.from(_filters.durations)..remove(d);
+          _filters = _filters.copyWith(durations: s);
+        })));
+      }
+    }
+    if (_filters.modalityEnabled) {
+      for (final m in _filters.modalities) {
+        tags.add(_FilterTag(m.label, () => setState(() {
+          final s = Set<FilterModality>.from(_filters.modalities)..remove(m);
+          _filters = _filters.copyWith(modalities: s);
+        })));
+      }
+    }
+    return tags;
+  }
+
+  // ── Géneros disponibles (derivado de los datos) ────────────────────────────
+  List<String> get _availableGenres => _mockGames
+      .map((g) => g.genre)
+      .toSet()
+      .toList()
+    ..sort();
+
+  // ── Juegos filtrados (computed) ────────────────────────────────────────────
   List<Game> get _filteredGames {
-    // TODO(backend): Este filtrado se haría en el servidor con query params:
-    //   GET /api/library?userId=X&platform=steam&search=witcher
-    return _mockGames.where((game) {
-      final matchesPlatform =
-          _selectedPlatform == null || game.platform == _selectedPlatform;
-      final matchesSearch = _searchQuery.isEmpty ||
+    // 1. Texto de búsqueda
+    var result = _mockGames.where((game) {
+      return _searchQuery.isEmpty ||
           game.title.toLowerCase().contains(_searchQuery);
-      return matchesPlatform && matchesSearch;
     }).toList();
+
+    // 2. Filtros avanzados
+    if (!_filters.isEmpty) {
+      result = _filters.apply(result);
+    }
+
+    return result;
   }
 
-  // ── Plataformas únicas presentes en la biblioteca ─────────────────────────
-  List<Platform> get _availablePlatforms {
-    return _mockGames.map((g) => g.platform).toSet().toList()
-      ..sort((a, b) => a.displayName.compareTo(b.displayName));
-  }
 
   @override
   void initState() {
     super.initState();
-    _searchCtrl.addListener(() {
-      setState(() => _searchQuery = _searchCtrl.text.trim().toLowerCase());
-    });
+    _searchCtrl.addListener(
+      () => setState(() => _searchQuery = _searchCtrl.text.trim().toLowerCase()),
+    );
     _searchFocus.addListener(
       () => setState(() => _isSearchFocused = _searchFocus.hasFocus),
     );
@@ -141,6 +170,17 @@ class _LibraryScreenState extends State<LibraryScreen>
     );
   }
 
+  Future<void> _openFilters() async {
+    final result = await showAdvancedFilters(
+      context: context,
+      current: _filters,
+      availableGenres: _availableGenres,
+    );
+    if (result != null) {
+      setState(() => _filters = result);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final filtered = _filteredGames;
@@ -149,17 +189,17 @@ class _LibraryScreenState extends State<LibraryScreen>
       children: [
         Column(
           children: [
-            // ── Barra de búsqueda + filtros ────────────────────────────────
+            // ── Barra superior ─────────────────────────────────────────────
             _LibraryTopBar(
-              searchCtrl: _searchCtrl,
-              searchFocus: _searchFocus,
-              isSearchFocused: _isSearchFocused,
-              availablePlatforms: _availablePlatforms,
-              selectedPlatform: _selectedPlatform,
-              onPlatformSelected: (p) => setState(() => _selectedPlatform = p),
-              totalGames: _mockGames.length,
-              filteredCount: filtered.length,
+              searchCtrl:       _searchCtrl,
+              searchFocus:      _searchFocus,
+              isSearchFocused:  _isSearchFocused,
+              totalGames:       _mockGames.length,
+              filteredCount:    filtered.length,
+              activeTags:       _activeFilterTags,
+              onFilterTap:      _openFilters,
             ),
+
             // ── Grid de juegos ─────────────────────────────────────────────
             Expanded(
               child: filtered.isEmpty
@@ -172,9 +212,9 @@ class _LibraryScreenState extends State<LibraryScreen>
           ],
         ),
 
-        // ── FAB "Shake to Play" ────────────────────────────────────────────
+        // ── FAB "Shake to Play" ──────────────────────────────────────────
         Positioned(
-          bottom: 90,
+          bottom: 24, // Bajado para estar cerca del navbar, no en el centro
           right: 16,
           child: const _ShakeToPlayFab(),
         ),
@@ -184,8 +224,7 @@ class _LibraryScreenState extends State<LibraryScreen>
 }
 
 // =============================================================================
-// _LibraryTopBar — Header + búsqueda + chips de filtro
-// Corresponde a la sección de filtros de Library.tsx
+// _LibraryTopBar — Búsqueda responsive + contador + botón de filtros
 // =============================================================================
 
 class _LibraryTopBar extends StatelessWidget {
@@ -193,106 +232,132 @@ class _LibraryTopBar extends StatelessWidget {
     required this.searchCtrl,
     required this.searchFocus,
     required this.isSearchFocused,
-    required this.availablePlatforms,
-    required this.selectedPlatform,
-    required this.onPlatformSelected,
     required this.totalGames,
     required this.filteredCount,
+    required this.activeTags,
+    required this.onFilterTap,
   });
 
   final TextEditingController searchCtrl;
-  final FocusNode searchFocus;
-  final bool isSearchFocused;
-  final List<Platform> availablePlatforms;
-  final Platform? selectedPlatform;
-  final ValueChanged<Platform?> onPlatformSelected;
-  final int totalGames;
-  final int filteredCount;
+  final FocusNode             searchFocus;
+  final bool                  isSearchFocused;
+  final int                   totalGames;
+  final int                   filteredCount;
+  final List<_FilterTag>      activeTags;
+  final VoidCallback          onFilterTap;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: const Color(0xFF101010),
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      color: _kBgCard,
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Título de sección ──────────────────────────────────────────────
+          // ── Row responsive: [SearchBar expandida] [Contador] ──────────────
           Row(
             children: [
-              const Icon(Icons.menu_book_rounded, size: 18, color: _cyan),
-              const SizedBox(width: 8),
-              const Text(
-                'Mi Biblioteca',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
+              // Campo de búsqueda — ocupa todo el espacio libre
+              Expanded(
+                child: _LibrarySearchBar(
+                  controller: searchCtrl,
+                  focusNode:  searchFocus,
+                  isFocused:  isSearchFocused,
                 ),
               ),
-              const Spacer(),
-              // Contador de juegos
+              const SizedBox(width: 8),
+
+              // Contador de juegos (se encoge automáticamente)
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
-                  color: _cyan.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _cyan.withValues(alpha: 0.2)),
+                  color: _kBg,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: _kBorder),
                 ),
                 child: Text(
-                  '$filteredCount / $totalGames juegos',
-                  style: const TextStyle(
+                  '$filteredCount/$totalGames\njuegos',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.inter(
                     fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: _cyan,
+                    fontWeight: FontWeight.w700,
+                    color: _kMuted,
+                    height: 1.4,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 12),
-
-          // ── Barra de búsqueda ──────────────────────────────────────────────
-          _LibrarySearchBar(
-            controller: searchCtrl,
-            focusNode: searchFocus,
-            isFocused: isSearchFocused,
-          ),
           const SizedBox(height: 10),
 
-          // ── Chips de filtro por plataforma ─────────────────────────────────
-          SizedBox(
-            height: 32,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: [
-                // Chip "Todas"
-                _PlatformFilterChip(
-                  label: 'Todas',
-                  isSelected: selectedPlatform == null,
-                  color: _cyan,
-                  onTap: () => onPlatformSelected(null),
-                ),
-                const SizedBox(width: 6),
-                // Chips de cada plataforma disponible
-                ...availablePlatforms.map((platform) {
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 6),
-                    child: _PlatformFilterChip(
-                      label: platform.displayName,
-                      isSelected: selectedPlatform == platform,
-                      color: platform.color,
-                      onTap: () => onPlatformSelected(
-                        selectedPlatform == platform ? null : platform,
-                      ),
+          // ── Fila de acción: botón de filtros + tags ───────────────────────
+          Row(
+            children: [
+              // Botón filtros avanzados
+              GestureDetector(
+                onTap: onFilterTap,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: activeTags.isNotEmpty
+                        ? _kYellow.withValues(alpha: 0.15)
+                        : _kBg,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: activeTags.isNotEmpty
+                          ? _kYellow.withValues(alpha: 0.5)
+                          : _kBorder,
+                      width: activeTags.isNotEmpty ? 1.5 : 1,
                     ),
-                  );
-                }),
-              ],
-            ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        Icons.tune_rounded,
+                        size: 13,
+                        color: activeTags.isNotEmpty ? _kYellow : _kMuted,
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        activeTags.isNotEmpty
+                            ? 'Filtros (${activeTags.length})'
+                            : 'Filtros',
+                        style: GoogleFonts.inter(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: activeTags.isNotEmpty ? _kYellow : _kMuted,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+
+              // Lista horizontal de filtros activos
+              if (activeTags.isNotEmpty)
+                Expanded(
+                  child: SizedBox(
+                    height: 28,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: activeTags.length,
+                      physics: const BouncingScrollPhysics(),
+                      itemBuilder: (context, index) {
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: _ActiveFilterChipWidget(tag: activeTags[index]),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+            ],
           ),
-          const SizedBox(height: 12),
-          const Divider(color: _border, height: 1),
+
+          const SizedBox(height: 10),
+          Container(height: 1, color: _kBorder),
         ],
       ),
     );
@@ -300,8 +365,7 @@ class _LibraryTopBar extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _LibrarySearchBar — Campo de búsqueda con efecto focus animado
-// Corresponde al <input type="search"> de Library.tsx
+// _LibrarySearchBar — Campo de búsqueda con foco animado
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _LibrarySearchBar extends StatelessWidget {
@@ -321,39 +385,30 @@ class _LibrarySearchBar extends StatelessWidget {
       duration: const Duration(milliseconds: 200),
       height: 42,
       decoration: BoxDecoration(
-        color: const Color(0xFF1A1A1A),
+        color: _kBg,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isFocused
-              ? _cyan.withValues(alpha: 0.45)
-              : const Color(0xFF2A2A2A),
+              ? _kYellow.withValues(alpha: 0.45)
+              : _kBorder,
           width: isFocused ? 1.5 : 1,
         ),
         boxShadow: isFocused
-            ? [BoxShadow(color: _cyan.withValues(alpha: 0.08), blurRadius: 10)]
+            ? [BoxShadow(color: _kYellow.withValues(alpha: 0.06), blurRadius: 10)]
             : null,
       ),
       child: TextField(
         controller: controller,
         focusNode: focusNode,
-        style: const TextStyle(color: _textMain, fontSize: 13),
+        style: GoogleFonts.inter(color: _kWhite, fontSize: 13),
         decoration: InputDecoration(
           hintText: 'Buscar en tu biblioteca...',
-          hintStyle: const TextStyle(color: _textMuted, fontSize: 13),
-          prefixIcon: const Icon(
-            Icons.search_rounded,
-            color: _textMuted,
-            size: 18,
-          ),
-          // Botón para limpiar búsqueda
+          hintStyle: GoogleFonts.inter(color: _kSub, fontSize: 13),
+          prefixIcon: const Icon(Icons.search_rounded, color: _kSub, size: 18),
           suffixIcon: controller.text.isNotEmpty
               ? GestureDetector(
                   onTap: () => controller.clear(),
-                  child: const Icon(
-                    Icons.close_rounded,
-                    color: _textSub,
-                    size: 16,
-                  ),
+                  child: const Icon(Icons.close_rounded, color: _kMuted, size: 16),
                 )
               : null,
           border: InputBorder.none,
@@ -366,45 +421,44 @@ class _LibrarySearchBar extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// _PlatformFilterChip — Chip individual de filtro de plataforma
-// Corresponde a los botones de filtro de Library.tsx
+// Clases y Widgets Auxiliares
 // ─────────────────────────────────────────────────────────────────────────────
 
-class _PlatformFilterChip extends StatelessWidget {
-  const _PlatformFilterChip({
-    required this.label,
-    required this.isSelected,
-    required this.color,
-    required this.onTap,
-  });
-
+class _FilterTag {
+  _FilterTag(this.label, this.onRemove);
   final String label;
-  final bool isSelected;
-  final Color color;
-  final VoidCallback onTap;
+  final VoidCallback onRemove;
+}
+
+class _ActiveFilterChipWidget extends StatelessWidget {
+  const _ActiveFilterChipWidget({required this.tag});
+  final _FilterTag tag;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 180),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      onTap: tag.onRemove,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: isSelected ? color.withValues(alpha: 0.18) : const Color(0xFF1C1C1C),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: isSelected ? color.withValues(alpha: 0.5) : const Color(0xFF2A2A2A),
-            width: isSelected ? 1.5 : 1,
-          ),
+          color: _kBgCard,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: _kYellow.withValues(alpha: 0.3)),
         ),
-        child: Text(
-          label,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-            color: isSelected ? color : _textSub,
-          ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              tag.label,
+              style: GoogleFonts.inter(
+                fontSize: 11,
+                color: _kWhite,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            const SizedBox(width: 4),
+            const Icon(Icons.close_rounded, size: 12, color: _kMuted),
+          ],
         ),
       ),
     );
@@ -413,7 +467,6 @@ class _PlatformFilterChip extends StatelessWidget {
 
 // =============================================================================
 // _LibraryGrid — GridView.builder de 2 columnas
-// Corresponde al grid de juegos de Library.tsx
 // =============================================================================
 
 class _LibraryGrid extends StatelessWidget {
@@ -427,13 +480,12 @@ class _LibraryGrid extends StatelessWidget {
     return GridView.builder(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
+        crossAxisCount:   2,
         crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
+        mainAxisSpacing:  10,
         childAspectRatio: 3 / 4,
       ),
       itemCount: games.length,
-      // TODO(backend): snapshot.data![index] cuando se use FutureBuilder.
       itemBuilder: (context, index) {
         final game = games[index];
         return Hero(
@@ -450,7 +502,7 @@ class _LibraryGrid extends StatelessWidget {
 }
 
 // =============================================================================
-// _ShakeToPlayFab — Botón flotante que navega al Selector Inteligente
+// _ShakeToPlayFab — Botón flotante → ShakeSelectorScreen
 // =============================================================================
 
 class _ShakeToPlayFab extends StatelessWidget {
@@ -460,34 +512,33 @@ class _ShakeToPlayFab extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => const ShakeSelectorScreen(),
-        ),
+        MaterialPageRoute(builder: (_) => const ShakeSelectorScreen()),
       ),
       child: Container(
         height: 52,
         padding: const EdgeInsets.symmetric(horizontal: 20),
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [Color(0xFF00E5FF), Color(0xFF7B61FF)],
+          // Gradiente actualizado al amarillo de la marca
+          gradient: LinearGradient(
+            colors: [_kYellow, _kYellow.withValues(alpha: 0.75)],
           ),
           borderRadius: BorderRadius.circular(26),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF00E5FF).withValues(alpha: 0.35),
+              color: _kYellow.withValues(alpha: 0.35),
               blurRadius: 18,
               offset: const Offset(0, 6),
             ),
           ],
         ),
-        child: const Row(
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.auto_awesome_rounded, color: Colors.black, size: 18),
-            SizedBox(width: 8),
+            const Icon(Icons.auto_awesome_rounded, color: Colors.black, size: 18),
+            const SizedBox(width: 8),
             Text(
               'Shake to Play',
-              style: TextStyle(
+              style: GoogleFonts.inter(
                 fontSize: 13,
                 fontWeight: FontWeight.w800,
                 color: Colors.black,
@@ -502,7 +553,7 @@ class _ShakeToPlayFab extends StatelessWidget {
 }
 
 // =============================================================================
-// _EmptyState — Vista cuando no hay resultados de búsqueda/filtro
+// _EmptyState — Vista cuando no hay resultados
 // =============================================================================
 
 class _EmptyState extends StatelessWidget {
@@ -521,32 +572,28 @@ class _EmptyState extends StatelessWidget {
               width: 64,
               height: 64,
               decoration: BoxDecoration(
-                color: _bgCard,
+                color: _kBgCard,
                 shape: BoxShape.circle,
-                border: Border.all(color: _border),
+                border: Border.all(color: _kBorder),
               ),
-              child: const Icon(
-                Icons.search_off_rounded,
-                color: _textMuted,
-                size: 28,
-              ),
+              child: const Icon(Icons.search_off_rounded, color: _kMuted, size: 28),
             ),
             const SizedBox(height: 16),
             Text(
               query.isEmpty
-                  ? 'No hay juegos en esta plataforma'
+                  ? 'No hay juegos con estos filtros'
                   : 'Sin resultados para "$query"',
-              style: const TextStyle(
+              style: GoogleFonts.inter(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: _textMain,
+                color: _kWhite,
               ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               'Prueba con otro filtro o término de búsqueda',
-              style: TextStyle(fontSize: 12, color: _textSub),
+              style: GoogleFonts.inter(fontSize: 12, color: _kMuted),
               textAlign: TextAlign.center,
             ),
           ],

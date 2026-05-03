@@ -1,20 +1,14 @@
 // =============================================================================
 // main_layout.dart — Bound2Game Flutter (Android)
-// Fuente: InterfazdeusuarioBound2game - CORRECTO / Layout.tsx
 //
-// Transformación web → móvil:
-//   Sidebar colapsable (web) → BottomNavigationBar (Android)
-//   Outlet con animación     → IndexedStack + AnimatedSwitcher
-//
-// Secciones de navegación (de NAV_ITEMS en Layout.tsx):
-//   1. Inicio            → Icons.dashboard_rounded
-//   2. Mi Biblioteca     → Icons.menu_book_rounded
-//   3. Social            → Icons.people_rounded
-//   4. Backlog           → Icons.checklist_rounded
-//   5. Ajustes           → Icons.settings_rounded
+// Layout principal refactorizado con identidad visual definitiva:
+//   - Paleta: fondo #292929, tarjetas/bar #1A1A1A, acento #FFB800.
+//   - AppBar: título dinámico animado (DynamicAppBarTitle), lupa amarilla.
+//   - BottomBar: indicador y íconos activos en amarillo #FFB800.
 // =============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../screens/dashboard_screen.dart';
 import '../screens/library_screen.dart';
@@ -22,13 +16,20 @@ import '../screens/social_screen.dart';
 import '../screens/deals_screen.dart';
 import '../screens/profile_screen.dart';
 import '../screens/search_delegate.dart';
-import '../theme/app_theme.dart';
+import '../screens/settings_screen.dart';
+import '../widgets/dynamic_appbar_title.dart';
+
+// ── Paleta definitiva ─────────────────────────────────────────────────────────
+const _kBgPage   = Color(0xFF292929); // Fondo de la página
+const _kBgBar    = Color(0xFF1A1A1A); // AppBar y BottomBar
+const _kBorder   = Color(0xFF2A2A2A); // Bordes sutiles
+const _kYellow   = Color(0xFFFFB800); // Acento principal
+const _kMuted    = Color(0xFF777777); // Ítems inactivos
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODELO DE ÍTEM DE NAVEGACIÓN
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Representa un ítem del BottomNavigationBar.
 class _NavItem {
   const _NavItem({
     required this.label,
@@ -44,39 +45,7 @@ class _NavItem {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PANTALLAS PLACEHOLDER
-// Se reemplazarán por las pantallas reales en pasos posteriores.
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _PlaceholderScreen extends StatelessWidget {
-  const _PlaceholderScreen({required this.title, required this.icon});
-
-  final String title;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, size: 48, color: AppColors.repPositive.withOpacity(0.4)),
-          const SizedBox(height: 16),
-          Text(title, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 8),
-          Text(
-            'Pantalla en construcción',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // DATOS DE NAVEGACIÓN
-// Mapea directamente NAV_ITEMS + Settings de Layout.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
 List<_NavItem> _buildNavItems(ValueChanged<int> onNavigate) => [
@@ -113,15 +82,9 @@ List<_NavItem> _buildNavItems(ValueChanged<int> onNavigate) => [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MAIN LAYOUT — Scaffold principal de la app
+// MAIN LAYOUT
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Layout principal de Bound2Game.
-///
-/// Contiene:
-/// - [AppBar] con barra de búsqueda, indicador de carga y campana.
-/// - [IndexedStack] para preservar el estado de cada pantalla al navegar.
-/// - [_B2GBottomBar] con los 5 ítems de navegación.
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
 
@@ -132,7 +95,6 @@ class MainLayout extends StatefulWidget {
 class _MainLayoutState extends State<MainLayout>
     with SingleTickerProviderStateMixin {
   int _selectedIndex = 0;
-  bool _isPageLoading = false;
 
   late final List<_NavItem> _navItems;
 
@@ -140,40 +102,61 @@ class _MainLayoutState extends State<MainLayout>
   void initState() {
     super.initState();
     _navItems = _buildNavItems(_onTabSelected);
+
+    // Barra de sistema transparente para integración con el fondo oscuro
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+    ));
   }
 
   void _onTabSelected(int index) {
     if (index == _selectedIndex) return;
-    setState(() { _isPageLoading = true; _selectedIndex = index; });
-    Future.delayed(const Duration(milliseconds: 400), () {
-      if (mounted) setState(() => _isPageLoading = false);
-    });
+    setState(() => _selectedIndex = index);
   }
+
+  String get _currentPageName => _navItems[_selectedIndex].label;
 
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
-      backgroundColor: const Color(0xFF151515),
+      backgroundColor: _kBgBar,
+      surfaceTintColor: Colors.transparent,
+      scrolledUnderElevation: 8.0,
+      shadowColor: Colors.black.withValues(alpha: 0.6),
       elevation: 0,
-      toolbarHeight: 64,
-      // Se eliminó la barra estática, ahora el título puede ser el logo o nada.
-      title: const Text('Bound2Game', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Color(0xFF00E5FF))),
+      toolbarHeight: 60,
+      // Título dinámico animado — alineado a la izquierda (centerTitle: false por defecto)
+      title: DynamicAppBarTitle(pageName: _currentPageName),
       actions: [
-        if (_isPageLoading) _LoadingIndicator(),
+        // Lupa en amarillo #FFB800
         IconButton(
-          icon: const Icon(Icons.search_rounded, color: Color(0xFFD1D1D1)),
+          icon: const Icon(Icons.search_rounded, color: _kYellow, size: 24),
           onPressed: () {
             showSearch(context: context, delegate: B2GSearchDelegate());
           },
         ),
-        const SizedBox(width: 8),
+        // Botón de ajustes en amarillo #FFB800
+        IconButton(
+          icon: const Icon(Icons.settings_rounded, color: _kYellow, size: 24),
+          onPressed: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            );
+          },
+        ),
+        const SizedBox(width: 4),
       ],
+      bottom: PreferredSize(
+        preferredSize: const Size.fromHeight(1),
+        child: Container(height: 1, color: _kBorder),
+      ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF101010),
+      backgroundColor: _kBgPage,
       appBar: _buildAppBar(),
       body: _AnimatedPageSwitcher(
         currentIndex: _selectedIndex,
@@ -190,7 +173,6 @@ class _MainLayoutState extends State<MainLayout>
 
 // ─────────────────────────────────────────────────────────────────────────────
 // WIDGET: _AnimatedPageSwitcher
-// Equivalente al AnimatePresence + motion.div de Layout.tsx
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _AnimatedPageSwitcher extends StatefulWidget {
@@ -219,14 +201,14 @@ class _AnimatedPageSwitcherState extends State<_AnimatedPageSwitcher>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 250),
+      duration: const Duration(milliseconds: 220),
     );
     _opacityAnimation = CurvedAnimation(
       parent: _controller,
       curve: Curves.easeOut,
     );
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.03),
+      begin: const Offset(0, 0.025),
       end: Offset.zero,
     ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOut));
 
@@ -255,7 +237,6 @@ class _AnimatedPageSwitcherState extends State<_AnimatedPageSwitcher>
       opacity: _opacityAnimation,
       child: SlideTransition(
         position: _slideAnimation,
-        // IndexedStack mantiene el estado de todas las pantallas en memoria.
         child: IndexedStack(
           index: _displayedIndex,
           children: widget.children,
@@ -266,7 +247,7 @@ class _AnimatedPageSwitcherState extends State<_AnimatedPageSwitcher>
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: _B2GBottomBar — BottomNavigationBar con estilo Bound2Game
+// WIDGET: _B2GBottomBar
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _B2GBottomBar extends StatelessWidget {
@@ -280,22 +261,24 @@ class _B2GBottomBar extends StatelessWidget {
   final ValueChanged<int> onTap;
   final List<_NavItem> navItems;
 
-  static const Color _activeColor   = Color(0xFF00E5FF);
-  static const Color _inactiveColor = Color(0xFF555555);
-  static const Color _bgColor       = Color(0xFF151515);
-  static const Color _borderColor   = Color(0xFF252525);
-
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        color: _bgColor,
-        border: Border(top: BorderSide(color: _borderColor, width: 1)),
+      decoration: BoxDecoration(
+        color: _kBgBar,
+        border: const Border(top: BorderSide(color: _kBorder, width: 1)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.6),
+            blurRadius: 12,
+            offset: const Offset(0, -4),
+          ),
+        ],
       ),
       child: SafeArea(
         top: false,
         child: SizedBox(
-          height: 60,
+          height: 62,
           child: Row(
             children: List.generate(navItems.length, (index) {
               final item = navItems[index];
@@ -305,8 +288,6 @@ class _B2GBottomBar extends StatelessWidget {
                   label: item.label,
                   icon: isActive ? item.activeIcon : item.icon,
                   isActive: isActive,
-                  activeColor: _activeColor,
-                  inactiveColor: _inactiveColor,
                   onTap: () => onTap(index),
                 ),
               );
@@ -319,7 +300,7 @@ class _B2GBottomBar extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: _NavBarItem — Ítem individual del BottomBar
+// WIDGET: _NavBarItem
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _NavBarItem extends StatelessWidget {
@@ -327,21 +308,17 @@ class _NavBarItem extends StatelessWidget {
     required this.label,
     required this.icon,
     required this.isActive,
-    required this.activeColor,
-    required this.inactiveColor,
     required this.onTap,
   });
 
   final String label;
   final IconData icon;
   final bool isActive;
-  final Color activeColor;
-  final Color inactiveColor;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final color = isActive ? activeColor : inactiveColor;
+    final color = isActive ? _kYellow : _kMuted;
 
     return GestureDetector(
       onTap: onTap,
@@ -353,19 +330,23 @@ class _NavBarItem extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Indicador activo (punto superior — equivalente a la línea
-            // vertical izquierda del sidebar activo en React)
+            // Indicador activo — línea superior amarilla
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeOut,
               height: 2,
-              width: isActive ? 20 : 0,
-              margin: const EdgeInsets.only(bottom: 4),
+              width: isActive ? 22 : 0,
+              margin: const EdgeInsets.only(bottom: 5),
               decoration: BoxDecoration(
-                color: activeColor,
+                color: _kYellow,
                 borderRadius: BorderRadius.circular(1),
                 boxShadow: isActive
-                    ? [BoxShadow(color: activeColor.withOpacity(0.5), blurRadius: 6)]
+                    ? [
+                        BoxShadow(
+                          color: _kYellow.withValues(alpha: 0.45),
+                          blurRadius: 8,
+                        )
+                      ]
                     : null,
               ),
             ),
@@ -379,6 +360,7 @@ class _NavBarItem extends StatelessWidget {
             AnimatedDefaultTextStyle(
               duration: const Duration(milliseconds: 200),
               style: TextStyle(
+                fontFamily: 'Inter',
                 fontSize: 10,
                 fontWeight: isActive ? FontWeight.w600 : FontWeight.w400,
                 color: color,
@@ -392,42 +374,3 @@ class _NavBarItem extends StatelessWidget {
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: _LoadingIndicator
-// Equivalente al indicador de carga animado del <header> en Layout.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _LoadingIndicator extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: const Color(0xFF00E5FF).withOpacity(0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: const Color(0xFF00E5FF).withOpacity(0.2)),
-      ),
-      child: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          SizedBox(
-            width: 12,
-            height: 12,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: Color(0xFF00E5FF),
-            ),
-          ),
-          SizedBox(width: 6),
-          Text(
-            'Cargando...',
-            style: TextStyle(fontSize: 11, color: Color(0xFF00E5FF)),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-

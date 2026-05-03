@@ -39,6 +39,7 @@ dependencies:
 
   # Persistencia local — filtros de tiendas y preferencias de notificaciones.
   shared_preferences: ^2.3.2
+  sensors_plus: ^7.0.0
 
 dev_dependencies:
   flutter_test:

@@ -70,17 +70,11 @@ class DealsScreen extends StatefulWidget {
 }
 
 class _DealsScreenState extends State<DealsScreen> {
-  int _heroPage = 0;
   final Set<String> _wishlist = {};
 
-  // Hero = gratuitos primero, luego top deals (máx 8 total)
+  // Hero = únicamente juegos gratuitos
   List<GameDeal> get _heroDeals {
-    final free = sampleDeals.where((d) => d.isFree).toList();
-    final top = (sampleDeals.where((d) => !d.isFree).toList()
-        ..sort((a, b) => b.discountPercent.compareTo(a.discountPercent)))
-        .take(4)
-        .toList();
-    return [...free, ...top];
+    return sampleDeals.where((d) => d.isFree).toList();
   }
 
   void _toggleWishlist(String id) =>
@@ -100,20 +94,18 @@ class _DealsScreenState extends State<DealsScreen> {
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          // ── 1. AppBar glassmorphism compacto ────────────────────────────
-          _GlassAppBar(),
-
-          // ── 2. Hero Carousel (gratuitos + top deals) ────────────────────
+          // ── 1. Hero Carousel (Solo juegos gratuitos) ────────────────────
           SliverToBoxAdapter(
-            child: _HeroCarousel(
-              deals: heroes,
-              currentPage: _heroPage,
-              onPageChanged: (p) => setState(() => _heroPage = p),
-              onTap: _openGame,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 20),
+              child: _HeroCarousel(
+                deals: heroes,
+                onTap: _openGame,
+              ),
             ),
           ),
 
-          // ── 3. Timeline próximos lanzamientos ───────────────────────────
+          // ── 2. Timeline próximos lanzamientos ───────────────────────────
           SliverToBoxAdapter(
             child: _UpcomingSection(
               wishlist: _wishlist,
@@ -121,7 +113,7 @@ class _DealsScreenState extends State<DealsScreen> {
             ),
           ),
 
-          // ── 4. Explorar por tienda ───────────────────────────────────────
+          // ── 3. Explorar por tienda ───────────────────────────────────────
           SliverToBoxAdapter(
             child: _StoreSection(),
           ),
@@ -133,155 +125,94 @@ class _DealsScreenState extends State<DealsScreen> {
   }
 }
 
-// =============================================================================
-// _GlassAppBar — AppBar compacto con texto estilizado
-// =============================================================================
-
-class _GlassAppBar extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final freeCount = sampleDeals.where((d) => d.isFree).length;
-    return SliverAppBar(
-      pinned: true,
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      flexibleSpace: ClipRect(
-        child: BackdropFilter(
-          filter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-          child: Container(
-            decoration: BoxDecoration(
-              color: const Color(0xFF0A0A0A).withValues(alpha: 0.82),
-              border: const Border(
-                bottom: BorderSide(color: Color(0xFF1E1E1E), width: 1),
-              ),
-            ),
-            padding: EdgeInsets.only(
-              top: MediaQuery.of(context).padding.top + 6,
-              left: 18, right: 18, bottom: 12,
-            ),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Ofertas',
-                        style: GoogleFonts.outfit(
-                          fontSize: 26, fontWeight: FontWeight.w900,
-                          color: Colors.white, letterSpacing: -0.5,
-                        ),
-                      ),
-                      Text(
-                        '$freeCount juegos gratis ahora mismo',
-                        style: GoogleFonts.outfit(
-                          fontSize: 11, color: _cyan,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                // Indicador premium
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF9B6DFF), Color(0xFF00E5FF)],
-                    ),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Text(
-                    'HOT 🔥',
-                    style: GoogleFonts.outfit(
-                      fontSize: 10, fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      toolbarHeight: MediaQuery.of(context).padding.top + 78,
-    );
-  }
-}
+// (Se elimina el _GlassAppBar)
 
 // =============================================================================
-// _HeroCarousel — PageView de deals destacados con glassmorphism
+// _HeroCarousel — PageView Animado (Cover Flow)
 // =============================================================================
 
-class _HeroCarousel extends StatelessWidget {
+class _HeroCarousel extends StatefulWidget {
   const _HeroCarousel({
     required this.deals,
-    required this.currentPage,
-    required this.onPageChanged,
     required this.onTap,
   });
 
   final List<GameDeal> deals;
-  final int currentPage;
-  final ValueChanged<int> onPageChanged;
   final void Function(GameDeal) onTap;
 
   @override
+  State<_HeroCarousel> createState() => _HeroCarouselState();
+}
+
+class _HeroCarouselState extends State<_HeroCarousel> {
+  late PageController _pageController;
+  int _currentPage = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController(viewportFraction: 0.82);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    if (widget.deals.isEmpty) return const SizedBox.shrink();
+
     return Column(
       children: [
-        // Label sección
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
-          child: Row(
-            children: [
-              Text(
-                'Lo mejor ahora',
-                style: GoogleFonts.outfit(
-                  fontSize: 18, fontWeight: FontWeight.w800,
-                  color: _textMain, letterSpacing: -0.3,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                '${currentPage + 1}/${deals.length}',
-                style: const TextStyle(fontSize: 11, color: _textSub),
-              ),
-            ],
-          ),
-        ),
-
         // PageView
         SizedBox(
-          height: 220,
+          height: 380,
           child: PageView.builder(
-            padEnds: false,
-            controller: PageController(viewportFraction: 0.88),
-            itemCount: deals.length,
-            onPageChanged: onPageChanged,
-            itemBuilder: (ctx, i) => _HeroCard(
-              deal: deals[i],
-              isActive: i == currentPage,
-              onTap: () => onTap(deals[i]),
-            ),
+            controller: _pageController,
+            physics: const BouncingScrollPhysics(),
+            itemCount: widget.deals.length,
+            onPageChanged: (i) => setState(() => _currentPage = i),
+            itemBuilder: (context, index) {
+              return AnimatedBuilder(
+                animation: _pageController,
+                builder: (context, child) {
+                  double value = 1.0;
+                  if (_pageController.position.haveDimensions) {
+                    value = _pageController.page! - index;
+                    value = (1 - (value.abs() * 0.15)).clamp(0.0, 1.0);
+                  }
+                  return Transform.scale(
+                    scale: Curves.easeOut.transform(value),
+                    child: Opacity(
+                      opacity: value.clamp(0.4, 1.0),
+                      child: child,
+                    ),
+                  );
+                },
+                child: _HeroCard(
+                  deal: widget.deals[index],
+                  onTap: () => widget.onTap(widget.deals[index]),
+                ),
+              );
+            },
           ),
         ),
 
         // Dots indicadores
-        const SizedBox(height: 10),
+        const SizedBox(height: 16),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(deals.length, (i) {
-            final active = i == currentPage;
+          children: List.generate(widget.deals.length, (i) {
+            final active = i == _currentPage;
             return AnimatedContainer(
               duration: const Duration(milliseconds: 250),
-              margin: const EdgeInsets.symmetric(horizontal: 3),
-              width: active ? 18 : 5,
-              height: 5,
+              margin: const EdgeInsets.symmetric(horizontal: 4),
+              width: active ? 22 : 6,
+              height: 6,
               decoration: BoxDecoration(
-                color: active ? _cyan : _textMuted,
+                color: active ? _yellow : _textMuted.withValues(alpha: 0.3),
                 borderRadius: BorderRadius.circular(3),
               ),
             );
@@ -293,9 +224,8 @@ class _HeroCarousel extends StatelessWidget {
 }
 
 class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.deal, required this.isActive, required this.onTap});
+  const _HeroCard({required this.deal, required this.onTap});
   final GameDeal deal;
-  final bool isActive;
   final VoidCallback onTap;
 
   @override
@@ -303,22 +233,20 @@ class _HeroCard extends StatelessWidget {
     final cfg = deal.store.config;
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
-        margin: EdgeInsets.symmetric(
-          horizontal: 6, vertical: isActive ? 0 : 12,
-        ),
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: isActive
-              ? [BoxShadow(
-                  color: (deal.isFree ? _green : cfg.color).withValues(alpha: 0.25),
-                  blurRadius: 20, offset: const Offset(0, 8),
-                )]
-              : [],
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.4),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            )
+          ],
         ),
         child: ClipRRect(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(20),
           child: Stack(
             fit: StackFit.expand,
             children: [
@@ -332,7 +260,7 @@ class _HeroCard extends StatelessWidget {
                     )
                   : Container(color: _bgCard2),
 
-              // Gradiente oscuro inferior
+              // Gradiente oscuro inferior agresivo
               Positioned.fill(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
@@ -341,113 +269,90 @@ class _HeroCard extends StatelessWidget {
                       end: Alignment.bottomCenter,
                       colors: [
                         Colors.transparent,
-                        Colors.black.withValues(alpha: 0.3),
-                        Colors.black.withValues(alpha: 0.88),
+                        Colors.transparent,
+                        Colors.black.withValues(alpha: 0.6),
+                        Colors.black.withValues(alpha: 0.95),
                       ],
-                      stops: const [0.2, 0.55, 1.0],
+                      stops: const [0.0, 0.4, 0.7, 1.0],
                     ),
                   ),
                 ),
               ),
 
-              // Contenido inferior con glassmorphism
+              // Contenido inferior
               Positioned(
                 bottom: 0, left: 0, right: 0,
-                child: ClipRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 0, sigmaY: 0),
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Tienda
+                      Row(
                         children: [
-                          // Badges fila
-                          Row(
-                            children: [
-                              // Badge tienda
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: cfg.color.withValues(alpha: 0.2),
-                                  borderRadius: BorderRadius.circular(6),
-                                  border: Border.all(
-                                      color: cfg.color.withValues(alpha: 0.4)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(cfg.icon, size: 9, color: cfg.color),
-                                    const SizedBox(width: 4),
-                                    Text(cfg.shortName,
-                                        style: TextStyle(
-                                            fontSize: 9,
-                                            fontWeight: FontWeight.w700,
-                                            color: cfg.color)),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              // Badge GRATIS o descuento
-                              if (deal.isFree)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: _green.withValues(alpha: 0.2),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                        color: _green.withValues(alpha: 0.5)),
-                                  ),
-                                  child: Text('GRATIS',
-                                      style: GoogleFonts.outfit(
-                                          fontSize: 9,
-                                          fontWeight: FontWeight.w800,
-                                          color: _green)),
-                                )
-                              else
-                                DiscountBadge(deal: deal, small: true),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-
-                          // Título
-                          Text(
-                            deal.gameTitle,
-                            style: GoogleFonts.outfit(
-                              fontSize: 16, fontWeight: FontWeight.w800,
-                              color: Colors.white, letterSpacing: -0.2,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-
-                          // Precio
-                          Row(
-                            children: [
-                              if (!deal.isFree && deal.discountPercent > 0) ...[
-                                Text(
-                                  deal.originalPriceLabel,
-                                  style: const TextStyle(
-                                    fontSize: 10, color: Color(0xFF888888),
-                                    decoration: TextDecoration.lineThrough,
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                              ],
-                              Text(
-                                deal.salePriceLabel,
-                                style: GoogleFonts.outfit(
-                                  fontSize: 15, fontWeight: FontWeight.w900,
-                                  color: deal.isFree ? _green : Colors.white,
-                                ),
-                              ),
-                            ],
-                          ),
+                          Icon(cfg.icon, size: 14, color: cfg.color),
+                          const SizedBox(width: 6),
+                          Text(cfg.name,
+                              style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: cfg.color)),
                         ],
                       ),
-                    ),
+                      const SizedBox(height: 8),
+
+                      // Título
+                      Text(
+                        deal.gameTitle,
+                        style: GoogleFonts.outfit(
+                          fontSize: 22, fontWeight: FontWeight.w900,
+                          color: Colors.white, letterSpacing: -0.5,
+                          height: 1.1,
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+
+                      // Precio original tachado (muy sutil)
+                      Text(
+                        deal.originalPriceLabel,
+                        style: const TextStyle(
+                          fontSize: 13, color: Color(0xFF888888),
+                          decoration: TextDecoration.lineThrough,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Botón RECLAMAR
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        decoration: BoxDecoration(
+                          color: _yellow,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _yellow.withValues(alpha: 0.3),
+                              blurRadius: 12, offset: const Offset(0, 4),
+                            )
+                          ],
+                        ),
+                        child: Center(
+                          child: Text(
+                            'RECLAMAR AHORA',
+                            style: GoogleFonts.outfit(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w900,
+                              color: Colors.black,
+                              letterSpacing: 0.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -770,7 +675,15 @@ class _StoreCard extends StatelessWidget {
                   color: cfg.color.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(cfg.icon, color: cfg.color, size: 19),
+                child: Center(
+                  child: store == DealStore.steam
+                      ? Image.asset('assets/images/steam_logo.jpeg', width: 24, height: 24, fit: BoxFit.contain)
+                      : store == DealStore.epic
+                          ? Image.asset('assets/images/epic_logo.jpeg', width: 24, height: 24, fit: BoxFit.contain)
+                          : store == DealStore.instantGaming
+                              ? Image.asset('assets/images/instant_logo.png', width: 24, height: 24, fit: BoxFit.contain)
+                              : Icon(cfg.icon, color: cfg.color, size: 19),
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
