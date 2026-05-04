@@ -10,8 +10,14 @@ WORKDIR /app
 # Copiamos primero los archivos de dependencias para aprovechar la caché de capas de Docker
 COPY package*.json ./
 
-# Instalamos las dependencias (solo las de producción si quieres, pero para el TFG mejor todas)
+# Instalamos nodemon globalmente para evitar problemas de rutas
+RUN npm install -g nodemon
+
+# Instalamos las dependencias
 RUN npm install
 
 # Copiamos el resto del código fuente
 COPY . .
+
+# Comando para levantar el servidor
+CMD ["npm", "run", "dev"]
