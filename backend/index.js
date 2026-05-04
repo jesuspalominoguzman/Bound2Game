@@ -1,7 +1,12 @@
 require('dotenv').config();
 const express = require('express');
+const http    = require('http');          // ← AÑADIDO (Fase III)
+const { Server } = require('socket.io'); // ← AÑADIDO (Fase III)
 const mongoose = require('mongoose');
 const cors = require('cors');
+
+// Socket controllers
+const chatSocket = require('./sockets/chat.socket'); // ← AÑADIDO (Fase III)
 
 // Rutas
 const gameRoutes = require('./src/routes/gameRoutes');
@@ -32,7 +37,17 @@ app.get('/', (req, res) => {
     res.json({ mensaje: '¡El backend de Bound2Game está funcionando perfectamente!' });
 });
 
-// Levantar el servidor
-app.listen(PORT, () => {
+// ── Levantar el servidor con soporte WebSocket ────────────────────────────
+// Envolvemos Express en un servidor HTTP nativo para que Socket.io pueda
+// compartir el mismo puerto sin cambiar ninguna ruta REST existente.
+const server = http.createServer(app);  // ← AÑADIDO (Fase III)
+const io = new Server(server, {         // ← AÑADIDO (Fase III)
+    cors: { origin: '*', methods: ['GET', 'POST'] },
+});
+
+// Inicializar namespace de chat
+chatSocket(io);                         // ← AÑADIDO (Fase III)
+
+server.listen(PORT, () => {             // ← AÑADIDO (Fase III — reemplaza app.listen)
     console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
 });

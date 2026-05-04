@@ -12,19 +12,29 @@
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:giphy_get/giphy_get.dart';
 import '../models/user_model.dart';
+import '../services/socket_service.dart';
+
+// TODO: Mueve esta clave a una variable de entorno o a flutter_dotenv.
+// Obtén tu API Key gratuita en https://developers.giphy.com/
+const _kGiphyApiKey = 'BSgmdKZuDX7iOouqo0eDnQl0340CRxc8';
+
+// ID de usuario autenticado actualmente (reemplazar por AuthService real).
+// Formato: MongoDB ObjectId del usuario en sesión.
+const _kCurrentUserId = 'CURRENT_USER_OBJECT_ID';
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
-const _bg        = Color(0xFF0D0D0D);
-const _bgCard    = Color(0xFF181818);
-const _bgCard2   = Color(0xFF1E1E1E);
-const _border    = Color(0xFF252525);
-const _textMain  = Color(0xFFE0E0E0);
+const _bg = Color(0xFF0D0D0D);
+const _bgCard = Color(0xFF181818);
+const _bgCard2 = Color(0xFF1E1E1E);
+const _border = Color(0xFF252525);
+const _textMain = Color(0xFFE0E0E0);
 const _textMuted = Color(0xFF4A4A4A);
-const _textSub   = Color(0xFF777777);
-const _cyan      = Color(0xFF00E5FF);
-const _cyanDark  = Color(0xFF00B8CC);
-const _green     = Color(0xFF39FF7E);
+const _textSub = Color(0xFF777777);
+const _cyan = Color(0xFF00E5FF);
+const _cyanDark = Color(0xFF00B8CC);
+const _green = Color(0xFF39FF7E);
 
 // =============================================================================
 // MODEL: ChatMessage
@@ -54,27 +64,32 @@ enum MessageType { text, emoji, gif }
 
 List<ChatMessage> _mockMessages(String username) => [
   ChatMessage(
-    id: 'm1', text: '¡Hola! ¿Jugamos algo esta noche?',
+    id: 'm1',
+    text: '¡Hola! ¿Jugamos algo esta noche?',
     isMe: false,
     timestamp: DateTime.now().subtract(const Duration(minutes: 14)),
   ),
   ChatMessage(
-    id: 'm2', text: '¡Claro! Estaba pensando en Elden Ring co-op.',
+    id: 'm2',
+    text: '¡Claro! Estaba pensando en Elden Ring co-op.',
     isMe: true,
     timestamp: DateTime.now().subtract(const Duration(minutes: 12)),
   ),
   ChatMessage(
-    id: 'm3', text: '¿Tienes pase de temporada? Hay DLC nuevo 🔥',
+    id: 'm3',
+    text: '¿Tienes pase de temporada? Hay DLC nuevo 🔥',
     isMe: false,
     timestamp: DateTime.now().subtract(const Duration(minutes: 10)),
   ),
   ChatMessage(
-    id: 'm4', text: 'Sí, lo compré ayer en oferta en Steam. ¡-60%!',
+    id: 'm4',
+    text: 'Sí, lo compré ayer en oferta en Steam. ¡-60%!',
     isMe: true,
     timestamp: DateTime.now().subtract(const Duration(minutes: 8)),
   ),
   ChatMessage(
-    id: 'm5', text: '¡Genial! Te mando invitación a las 22:00 👾',
+    id: 'm5',
+    text: '¡Genial! Te mando invitación a las 22:00 👾',
     isMe: false,
     timestamp: DateTime.now().subtract(const Duration(minutes: 2)),
   ),
@@ -85,8 +100,16 @@ List<ChatMessage> _mockMessages(String username) => [
 // =============================================================================
 
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key, required this.user});
+  const ChatScreen({
+    super.key,
+    required this.user,
+
+    /// ID único de la sala. Si no se pasa se genera automáticamente
+    /// ordenando los IDs de ambos usuarios para garantizar unicidad.
+    this.roomId,
+  });
   final SocialUser user;
+  final String? roomId;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -99,12 +122,40 @@ class _ChatScreenState extends State<ChatScreen> {
   bool _isFocused = false;
   bool _showEmojiPicker = false;
 
+  // ── WebSocket ─────────────────────────────────────────────────────────────
+  final _socketService = SocketService();
+  late final String _roomId;
+
   late final List<ChatMessage> _messages;
 
   @override
   void initState() {
     super.initState();
     _messages = _mockMessages(widget.user.username);
+
+    // Calcular roomId único y estable para esta pareja de usuarios
+    _roomId = widget.roomId ?? _buildRoomId(_kCurrentUserId, widget.user.id);
+
+    // Conectar al WebSocket y unirse a la sala
+    _socketService.connect(_roomId);
+
+    // Escuchar historial inicial (llega al hacer joinRoom)
+    _socketService.onChatHistory((data) {
+      if (!mounted) return;
+      final list = (data as List).map((m) => _fromSocketData(m)).toList();
+      setState(() {
+        _messages
+          ..clear()
+          ..addAll(list.reversed); // reversed porque ListView es reverse:true
+      });
+    });
+
+    // Escuchar nuevos mensajes en tiempo real
+    _socketService.onNewMessage((data) {
+      if (!mounted) return;
+      setState(() => _messages.insert(0, _fromSocketData(data)));
+    });
+
     _focusNode.addListener(() {
       setState(() {
         _isFocused = _focusNode.hasFocus;
@@ -113,8 +164,36 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  /// Genera un roomId estable ordenando los IDs lexicográficamente.
+  /// Acepta el [int] id de [SocialUser] y el userId actual (String).
+  static String _buildRoomId(String currentUserId, int otherUserId) {
+    final a = currentUserId;
+    final b = otherUserId.toString();
+    return (a.compareTo(b) <= 0) ? '${a}_$b' : '${b}_$a';
+  }
+
+  /// Convierte el payload JSON del socket en un [ChatMessage] local.
+  ChatMessage _fromSocketData(dynamic data) {
+    final isMe = data['senderId'].toString() == _kCurrentUserId;
+    final type = data['messageType'] == 'gif'
+        ? MessageType.gif
+        : MessageType.text;
+    return ChatMessage(
+      id:
+          data['_id']?.toString() ??
+          DateTime.now().millisecondsSinceEpoch.toString(),
+      text: data['content'] as String,
+      isMe: isMe,
+      timestamp:
+          DateTime.tryParse(data['createdAt']?.toString() ?? '') ??
+          DateTime.now(),
+      type: type,
+    );
+  }
+
   @override
   void dispose() {
+    _socketService.disconnect();
     _textCtrl.dispose();
     _focusNode.dispose();
     _scrollCtrl.dispose();
@@ -128,6 +207,16 @@ class _ChatScreenState extends State<ChatScreen> {
     if (text.isEmpty) return;
 
     HapticFeedback.lightImpact();
+
+    // Enviar al servidor via WebSocket (persiste en Mongo con TTL 24h)
+    _socketService.sendMessage(
+      roomId: _roomId,
+      userId: _kCurrentUserId,
+      content: text,
+      type: 'text',
+    );
+
+    // Añadir localmente de forma optimista para UX inmediata
     setState(() {
       _messages.insert(
         0,
@@ -140,6 +229,54 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       _textCtrl.clear();
       _showEmojiPicker = false;
+    });
+  }
+
+  // ── GIF via Giphy ─────────────────────────────────────────────────────────
+
+  /// Abre el buscador nativo de GIFs de Giphy, obtiene la URL de la imagen
+  /// original y la envía como mensaje de tipo 'gif' a través del WebSocket.
+  Future<void> _sendGif() async {
+    // Ocultar teclado y emoji picker antes de abrir el selector
+    _focusNode.unfocus();
+    setState(() => _showEmojiPicker = false);
+
+    final gif = await GiphyGet.getGif(
+      context: context,
+      apiKey: _kGiphyApiKey,
+      lang: GiphyLanguage.spanish, // Búsquedas en español
+      tabColor: const Color(0xFF00E5FF), // Color cyan del tema
+    );
+
+    // El usuario canceló el selector o no seleccionó ningún GIF
+    if (gif == null || !mounted) return;
+
+    // Obtener la URL de la imagen original (mejor calidad)
+    final gifUrl = gif.images?.original?.url;
+    if (gifUrl == null) return;
+
+    HapticFeedback.lightImpact();
+
+    // Enviar al servidor via WebSocket
+    _socketService.sendMessage(
+      roomId: _roomId,
+      userId: _kCurrentUserId,
+      content: gifUrl,
+      type: 'gif',
+    );
+
+    // Añadir localmente de forma optimista
+    setState(() {
+      _messages.insert(
+        0,
+        ChatMessage(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          text: gifUrl,
+          isMe: true,
+          timestamp: DateTime.now(),
+          type: MessageType.gif,
+        ),
+      );
     });
   }
 
@@ -222,7 +359,8 @@ class _ChatScreenState extends State<ChatScreen> {
                       _MessageBubble(
                         message: msg,
                         timeLabel: _formatTime(msg.timestamp),
-                        showAvatar: !msg.isMe &&
+                        showAvatar:
+                            !msg.isMe &&
                             (i == _messages.length - 1 ||
                                 _messages[i + 1].isMe),
                         user: widget.user,
@@ -251,15 +389,7 @@ class _ChatScreenState extends State<ChatScreen> {
             showEmojiPicker: _showEmojiPicker,
             onSend: _sendText,
             onToggleEmoji: _toggleEmojiPicker,
-            onGifTap: () => ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('GIFs próximamente disponibles 🎬',
-                    style: TextStyle(fontSize: 12)),
-                backgroundColor: Color(0xFF1A1A1A),
-                behavior: SnackBarBehavior.floating,
-                duration: Duration(seconds: 2),
-              ),
-            ),
+            onGifTap: _sendGif, // ← Fase III: selector Giphy real
           ),
         ],
       ),
@@ -281,7 +411,9 @@ class _ChatAppBar extends StatelessWidget {
       color: const Color(0xFF111111),
       padding: EdgeInsets.only(
         top: MediaQuery.of(context).padding.top + 4,
-        left: 8, right: 16, bottom: 10,
+        left: 8,
+        right: 16,
+        bottom: 10,
       ),
       child: Row(
         children: [
@@ -290,8 +422,11 @@ class _ChatAppBar extends StatelessWidget {
             onTap: () => Navigator.of(context).pop(),
             child: Container(
               padding: const EdgeInsets.all(8),
-              child: const Icon(Icons.arrow_back_rounded,
-                  color: _textMain, size: 22),
+              child: const Icon(
+                Icons.arrow_back_rounded,
+                color: _textMain,
+                size: 22,
+              ),
             ),
           ),
           const SizedBox(width: 4),
@@ -302,26 +437,36 @@ class _ChatAppBar extends StatelessWidget {
               CircleAvatar(
                 radius: 20,
                 backgroundColor: const Color(0xFF252525),
-                backgroundImage: user.avatarUrl != null && user.avatarUrl!.isNotEmpty
+                backgroundImage:
+                    user.avatarUrl != null && user.avatarUrl!.isNotEmpty
                     ? NetworkImage(user.avatarUrl!)
                     : null,
                 child: user.avatarUrl == null || user.avatarUrl!.isEmpty
-                    ? Text(user.username[0].toUpperCase(),
+                    ? Text(
+                        user.username[0].toUpperCase(),
                         style: const TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w700,
-                            color: _cyan))
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: _cyan,
+                        ),
+                      )
                     : null,
               ),
               // Indicador online
               if (user.isOnline)
                 Positioned(
-                  bottom: 0, right: 0,
+                  bottom: 0,
+                  right: 0,
                   child: Container(
-                    width: 10, height: 10,
+                    width: 10,
+                    height: 10,
                     decoration: BoxDecoration(
                       color: _green,
                       shape: BoxShape.circle,
-                      border: Border.all(color: const Color(0xFF111111), width: 2),
+                      border: Border.all(
+                        color: const Color(0xFF111111),
+                        width: 2,
+                      ),
                       boxShadow: [
                         BoxShadow(
                           color: _green.withValues(alpha: 0.5),
@@ -343,19 +488,19 @@ class _ChatAppBar extends StatelessWidget {
                 Text(
                   user.username,
                   style: const TextStyle(
-                    fontSize: 14, fontWeight: FontWeight.w700,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
                     color: _textMain,
                   ),
                 ),
                 Text(
-                  user.isOnline
-                      ? 'En línea'
-                      : 'Desconectado',
+                  user.isOnline ? 'En línea' : 'Desconectado',
                   style: TextStyle(
                     fontSize: 10,
                     color: user.isOnline ? _green : _textMuted,
                   ),
-                  maxLines: 1, overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
@@ -364,8 +509,11 @@ class _ChatAppBar extends StatelessWidget {
           // Botón más opciones
           GestureDetector(
             onTap: () {},
-            child: const Icon(Icons.more_vert_rounded,
-                color: _textSub, size: 20),
+            child: const Icon(
+              Icons.more_vert_rounded,
+              color: _textSub,
+              size: 20,
+            ),
           ),
         ],
       ),
@@ -430,8 +578,10 @@ class _DateBadge extends StatelessWidget {
           Expanded(child: Container(height: 1, color: _border)),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10),
-            child: Text(_label,
-                style: const TextStyle(fontSize: 10, color: _textMuted)),
+            child: Text(
+              _label,
+              style: const TextStyle(fontSize: 10, color: _textMuted),
+            ),
           ),
           Expanded(child: Container(height: 1, color: _border)),
         ],
@@ -466,8 +616,9 @@ class _MessageBubble extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.end,
-        mainAxisAlignment:
-            isMe ? MainAxisAlignment.end : MainAxisAlignment.start,
+        mainAxisAlignment: isMe
+            ? MainAxisAlignment.end
+            : MainAxisAlignment.start,
         children: [
           // Avatar del otro (solo en último de su bloque)
           if (!isMe) ...[
@@ -477,13 +628,18 @@ class _MessageBubble extends StatelessWidget {
                   ? CircleAvatar(
                       radius: 13,
                       backgroundColor: const Color(0xFF252525),
-                      backgroundImage: user.avatarUrl != null && user.avatarUrl!.isNotEmpty
+                      backgroundImage:
+                          user.avatarUrl != null && user.avatarUrl!.isNotEmpty
                           ? NetworkImage(user.avatarUrl!)
                           : null,
                       child: user.avatarUrl == null || user.avatarUrl!.isEmpty
-                          ? Text(user.username[0].toUpperCase(),
+                          ? Text(
+                              user.username[0].toUpperCase(),
                               style: const TextStyle(
-                                  fontSize: 10, color: _cyan))
+                                fontSize: 10,
+                                color: _cyan,
+                              ),
+                            )
                           : null,
                     )
                   : null,
@@ -494,15 +650,54 @@ class _MessageBubble extends StatelessWidget {
           // Burbuja
           Flexible(
             child: Column(
-              crossAxisAlignment:
-                  isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+              crossAxisAlignment: isMe
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
               children: [
                 if (isEmoji)
                   // Emoji grande sin burbuja
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 2),
-                    child: Text(message.text,
-                        style: const TextStyle(fontSize: 36)),
+                    child: Text(
+                      message.text,
+                      style: const TextStyle(fontSize: 36),
+                    ),
+                  )
+                else if (message.type == MessageType.gif)
+                  // ── Burbuja GIF ─────────────────────────────────────────
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      message.text,
+                      width: MediaQuery.of(context).size.width * 0.55,
+                      fit: BoxFit.cover,
+                      loadingBuilder: (ctx, child, progress) {
+                        if (progress == null) return child;
+                        return Container(
+                          width: MediaQuery.of(context).size.width * 0.55,
+                          height: 140,
+                          color: _bgCard,
+                          child: const Center(
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: _cyan,
+                            ),
+                          ),
+                        );
+                      },
+                      errorBuilder: (_, __, ___) => Container(
+                        width: 140,
+                        height: 80,
+                        color: _bgCard,
+                        child: const Center(
+                          child: Icon(
+                            Icons.broken_image_outlined,
+                            color: _textMuted,
+                            size: 28,
+                          ),
+                        ),
+                      ),
+                    ),
                   )
                 else
                   Container(
@@ -510,27 +705,27 @@ class _MessageBubble extends StatelessWidget {
                       maxWidth: MediaQuery.of(context).size.width * 0.68,
                     ),
                     padding: const EdgeInsets.symmetric(
-                        horizontal: 13, vertical: 9),
+                      horizontal: 13,
+                      vertical: 9,
+                    ),
                     decoration: BoxDecoration(
                       color: isMe ? _cyan : _bgCard,
                       borderRadius: BorderRadius.only(
                         topLeft: const Radius.circular(16),
                         topRight: const Radius.circular(16),
-                        bottomLeft:
-                            Radius.circular(isMe ? 16 : 4),
-                        bottomRight:
-                            Radius.circular(isMe ? 4 : 16),
+                        bottomLeft: Radius.circular(isMe ? 16 : 4),
+                        bottomRight: Radius.circular(isMe ? 4 : 16),
                       ),
                       boxShadow: isMe
-                          ? [BoxShadow(
-                              color: _cyan.withValues(alpha: 0.18),
-                              blurRadius: 8,
-                              offset: const Offset(0, 3),
-                            )]
+                          ? [
+                              BoxShadow(
+                                color: _cyan.withValues(alpha: 0.18),
+                                blurRadius: 8,
+                                offset: const Offset(0, 3),
+                              ),
+                            ]
                           : [],
-                      border: isMe
-                          ? null
-                          : Border.all(color: _border),
+                      border: isMe ? null : Border.all(color: _border),
                     ),
                     child: Text(
                       message.text,
@@ -545,9 +740,10 @@ class _MessageBubble extends StatelessWidget {
                 // Timestamp
                 Padding(
                   padding: const EdgeInsets.only(top: 2, left: 4, right: 4),
-                  child: Text(timeLabel,
-                      style: const TextStyle(
-                          fontSize: 9, color: _textMuted)),
+                  child: Text(
+                    timeLabel,
+                    style: const TextStyle(fontSize: 9, color: _textMuted),
+                  ),
                 ),
               ],
             ),
@@ -565,9 +761,30 @@ class _MessageBubble extends StatelessWidget {
 // =============================================================================
 
 const _kEmojis = [
-  '😂', '❤️', '🔥', '👾', '🎮', '💀', '😎', '🤝',
-  '👀', '💯', '🫡', '⚡', '🏆', '🎯', '💥', '🚀',
-  '👑', '🫶', '😤', '😮', '🤯', '🥶', '😱', '🤙',
+  '😂',
+  '❤️',
+  '🔥',
+  '👾',
+  '🎮',
+  '💀',
+  '😎',
+  '🤝',
+  '👀',
+  '💯',
+  '🫡',
+  '⚡',
+  '🏆',
+  '🎯',
+  '💥',
+  '🚀',
+  '👑',
+  '🫶',
+  '😤',
+  '😮',
+  '🤯',
+  '🥶',
+  '😱',
+  '🤙',
 ];
 
 class _EmojiPicker extends StatelessWidget {
@@ -596,8 +813,7 @@ class _EmojiPicker extends StatelessWidget {
               color: Colors.transparent,
             ),
             child: Center(
-              child: Text(_kEmojis[i],
-                  style: const TextStyle(fontSize: 24)),
+              child: Text(_kEmojis[i], style: const TextStyle(fontSize: 24)),
             ),
           ),
         ),
@@ -634,7 +850,9 @@ class _ChatInputBar extends StatelessWidget {
     return Container(
       color: const Color(0xFF111111),
       padding: EdgeInsets.only(
-        left: 10, right: 10, top: 8,
+        left: 10,
+        right: 10,
+        top: 8,
         bottom: MediaQuery.of(context).padding.bottom + 8,
       ),
       child: Row(
@@ -659,16 +877,16 @@ class _ChatInputBar extends StatelessWidget {
                 color: _bgCard2,
                 borderRadius: BorderRadius.circular(22),
                 border: Border.all(
-                  color: isFocused
-                      ? _cyan.withValues(alpha: 0.45)
-                      : _border,
+                  color: isFocused ? _cyan.withValues(alpha: 0.45) : _border,
                   width: isFocused ? 1.5 : 1,
                 ),
                 boxShadow: isFocused
-                    ? [BoxShadow(
-                        color: _cyan.withValues(alpha: 0.06),
-                        blurRadius: 12,
-                      )]
+                    ? [
+                        BoxShadow(
+                          color: _cyan.withValues(alpha: 0.06),
+                          blurRadius: 12,
+                        ),
+                      ]
                     : [],
               ),
               child: TextField(
@@ -677,13 +895,18 @@ class _ChatInputBar extends StatelessWidget {
                 maxLines: null,
                 textInputAction: TextInputAction.newline,
                 style: const TextStyle(
-                    color: _textMain, fontSize: 13, height: 1.4),
+                  color: _textMain,
+                  fontSize: 13,
+                  height: 1.4,
+                ),
                 decoration: const InputDecoration(
                   hintText: 'Escribe un mensaje...',
                   hintStyle: TextStyle(color: _textMuted, fontSize: 13),
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
                   isDense: true,
                 ),
               ),
@@ -708,7 +931,8 @@ class _ChatInputBar extends StatelessWidget {
                 onTap: onSend,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
-                  width: 42, height: 42,
+                  width: 42,
+                  height: 42,
                   decoration: BoxDecoration(
                     gradient: hasText
                         ? const LinearGradient(
@@ -719,14 +943,14 @@ class _ChatInputBar extends StatelessWidget {
                         : null,
                     color: hasText ? null : _bgCard2,
                     shape: BoxShape.circle,
-                    border: hasText
-                        ? null
-                        : Border.all(color: _border),
+                    border: hasText ? null : Border.all(color: _border),
                     boxShadow: hasText
-                        ? [BoxShadow(
-                            color: _cyan.withValues(alpha: 0.3),
-                            blurRadius: 10,
-                          )]
+                        ? [
+                            BoxShadow(
+                              color: _cyan.withValues(alpha: 0.3),
+                              blurRadius: 10,
+                            ),
+                          ]
                         : [],
                   ),
                   child: Icon(
@@ -746,7 +970,9 @@ class _ChatInputBar extends StatelessWidget {
 
 class _IconActionBtn extends StatelessWidget {
   const _IconActionBtn({
-    required this.icon, required this.color, required this.onTap,
+    required this.icon,
+    required this.color,
+    required this.onTap,
   });
   final IconData icon;
   final Color color;
@@ -756,10 +982,9 @@ class _IconActionBtn extends StatelessWidget {
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
     child: SizedBox(
-      width: 36, height: 42,
-      child: Center(
-        child: Icon(icon, size: 22, color: color),
-      ),
+      width: 36,
+      height: 42,
+      child: Center(child: Icon(icon, size: 22, color: color)),
     ),
   );
 }

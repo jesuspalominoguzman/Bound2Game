@@ -7,7 +7,8 @@
     "express": "^5.2.1",
     "howlongtobeat": "^1.8.0",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^9.4.1"
+    "mongoose": "^9.4.1",
+    "socket.io": "^4.8.3"
   },
   "name": "backend",
   "version": "1.0.0",

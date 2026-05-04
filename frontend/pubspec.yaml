@@ -41,6 +41,13 @@ dependencies:
   shared_preferences: ^2.3.2
   sensors_plus: ^7.0.0
 
+  # ── Fase III: Módulo Social & Chat ─────────────────────────────────────────
+  # Cliente WebSocket para el chat en tiempo real con Socket.io.
+  socket_io_client: ^2.0.3+1
+
+  # Buscador y selector de GIFs integrado con la API de Giphy.
+  giphy_get: ^3.6.1+1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
