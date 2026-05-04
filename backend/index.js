@@ -5,7 +5,7 @@ const cors = require('cors');
 
 // Rutas
 const gameRoutes = require('./src/routes/gameRoutes');
-const userRoutes = require('./src/routes/userRoutes');
+const authRoutes = require('./src/routes/authRoutes');
 
 // Inicializamos la app de Express
 const app = express();
@@ -25,7 +25,7 @@ mongoose.connect(MONGO_URI)
 
 // Rutas base
 app.use('/api/games', gameRoutes);
-app.use('/api/users', userRoutes);
+app.use('/api/auth', authRoutes);
 
 // Ruta de prueba
 app.get('/', (req, res) => {
