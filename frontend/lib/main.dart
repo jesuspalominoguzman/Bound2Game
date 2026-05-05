@@ -8,6 +8,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 
 import 'screens/main_layout.dart';
@@ -18,10 +19,13 @@ import 'theme/app_theme.dart';
 /// Key global para navegación sin contexto
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-void main() {
+void main() async {
   // Garantiza que los bindings de Flutter estén inicializados antes de
   // configurar la orientación y la barra de estado del sistema.
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Cargar variables de entorno
+  await dotenv.load(fileName: ".env");
 
   // Forza orientación vertical (portrait) — app 100% móvil.
   SystemChrome.setPreferredOrientations([

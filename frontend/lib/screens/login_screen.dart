@@ -18,6 +18,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'main_layout.dart';
+import '../services/auth_service.dart';
 
 // ── Paleta (Ahora importada de app_theme.dart) ──────────────────────────────
 import '../theme/app_theme.dart';
@@ -83,6 +84,7 @@ class _LoginScreenState extends State<LoginScreen>
   // ── Formulario ─────────────────────────────────────────────────────────────
   double _formOpacity = 0.0;
   bool _isLogin = true;
+  bool _isLoading = false;
   final _emailCtrl  = TextEditingController();
   final _passCtrl   = TextEditingController();
   final _userCtrl   = TextEditingController();
@@ -217,10 +219,55 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _toggleMode() => setState(() => _isLogin = !_isLogin);
 
-  void _submit() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const MainLayout()),
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message, style: GoogleFonts.outfit(color: Colors.white)),
+        backgroundColor: Colors.redAccent,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
+  }
+
+  Future<void> _submit() async {
+    // 1. Validación de campos vacíos
+    if (_emailCtrl.text.trim().isEmpty || _passCtrl.text.trim().isEmpty) {
+      _showError('Por favor, rellena el email y contraseña');
+      return;
+    }
+    if (!_isLogin && _userCtrl.text.trim().isEmpty) {
+      _showError('Por favor, indica un nombre de usuario');
+      return;
+    }
+
+    // 2. Estado de carga
+    setState(() => _isLoading = true);
+
+    // 3. Llamada al Backend
+    final authService = AuthService();
+    Map<String, dynamic> result;
+
+    if (_isLogin) {
+      result = await authService.login(_emailCtrl.text.trim(), _passCtrl.text.trim());
+    } else {
+      result = await authService.register(
+        _userCtrl.text.trim(),
+        _emailCtrl.text.trim(),
+        _passCtrl.text.trim(),
+      );
+    }
+
+    setState(() => _isLoading = false);
+
+    // 4. Navegación o Error
+    if (result['success']) {
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainLayout()),
+      );
+    } else {
+      _showError(result['error']);
+    }
   }
 
   // ── Build ─────────────────────────────────────────────────────────────────
@@ -399,7 +446,8 @@ class _LoginScreenState extends State<LoginScreen>
 
                       _SubmitButton(
                         label: _isLogin ? 'Iniciar Sesión' : 'Crear Cuenta',
-                        onTap: _submit,
+                        isLoading: _isLoading,
+                        onTap: _isLoading ? () {} : _submit,
                       ),
 
                       const SizedBox(height: 16),
@@ -446,9 +494,10 @@ class _LoginScreenState extends State<LoginScreen>
 // =============================================================================
 
 class _SubmitButton extends StatefulWidget {
-  const _SubmitButton({required this.label, required this.onTap});
+  const _SubmitButton({required this.label, required this.onTap, this.isLoading = false});
   final String label;
   final VoidCallback onTap;
+  final bool isLoading;
   @override
   State<_SubmitButton> createState() => _SubmitButtonState();
 }
@@ -488,16 +537,25 @@ class _SubmitButtonState extends State<_SubmitButton> {
           child: Center(
             child: AnimatedSwitcher(
               duration: const Duration(milliseconds: 180),
-              child: Text(
-                widget.label,
-                key: ValueKey(widget.label),
-                style: GoogleFonts.outfit(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.black,
-                  letterSpacing: 0.6,
-                ),
-              ),
+              child: widget.isLoading
+                  ? const SizedBox(
+                      width: 24,
+                      height: 24,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.black),
+                      ),
+                    )
+                  : Text(
+                      widget.label,
+                      key: ValueKey(widget.label),
+                      style: GoogleFonts.outfit(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
             ),
           ),
         ),
