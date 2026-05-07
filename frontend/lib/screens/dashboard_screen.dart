@@ -9,11 +9,9 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../models/game_model.dart';
 import '../models/user_model.dart';
-import '../widgets/platform_badge.dart';
-import '../widgets/pc_req_dot.dart';
-import 'game_detail_screen.dart';
+import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import 'chat_screen.dart';
 
 // ── Paleta local (identidad visual definitiva) ────────────────────────────────
@@ -31,61 +29,123 @@ class _StatData {
   final String description;
 }
 
-// ── Datos de estadísticas — textos exactos del brief ─────────────────────────
-const _stats = [
-  _StatData(value: '142',   description: 'Juegos en local'),
-  _StatData(value: '1.847', description: 'Horas jugadas'),
-  _StatData(value: '38',    description: 'Juegos completados'),
-  _StatData(value: '47',    description: 'Juegos pendientes'),
-];
-
 // ─────────────────────────────────────────────────────────────────────────────
 // DASHBOARD SCREEN
 // ─────────────────────────────────────────────────────────────────────────────
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, this.onNavigate});
-
   final ValueChanged<int>? onNavigate;
 
   @override
-  Widget build(BuildContext context) {
-    final recentGames  = sampleGames.take(4).toList();
-    // Solo amigos online para la sección "Usuarios activos"
-    final onlineUsers  = mockUsers.where((u) => u.isOnline).take(4).toList();
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
 
-    return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
-      children: [
-        // ── Encabezado de sección ──────────────────────────────────────────
-        const _SectionLabel(text: 'MIS ESTADÍSTICAS'),
-        const SizedBox(height: 12),
+class _DashboardScreenState extends State<DashboardScreen> {
+  // Datos del usuario autenticado (cargados al init)
+  String? _userId;
+  Future<_DashboardData>? _future;
 
-        // ── PROTAGONISTAS: Grid de estadísticas grande ─────────────────────
-        const _StatsGrid(),
-        const SizedBox(height: 32),
+  @override
+  void initState() {
+    super.initState();
+    _loadUser();
+  }
 
-        // ── Juegos Recientes ───────────────────────────────────────────────
-        _SectionHeader(
-          title: 'Juegos Recientes',
-          actionLabel: 'Ver biblioteca',
-          onTap: () => onNavigate?.call(1),
-        ),
-        const SizedBox(height: 14),
-        _RecentGamesGrid(games: recentGames),
-        const SizedBox(height: 32),
+  Future<void> _loadUser() async {
+    final user = await AuthService.getCurrentUser();
+    if (user != null && mounted) {
+      setState(() {
+        _userId = user.id;
+        _future = _fetchDashboard(user.id);
+      });
+    }
+  }
 
-        // ── Usuarios activos (solo online) ─────────────────────────────────
-        _SectionHeader(
-          title: 'Usuarios activos',
-          actionLabel: 'Ver comunidad',
-          onTap: () => onNavigate?.call(3),
-        ),
-        const SizedBox(height: 14),
-        _ActiveUsersList(users: onlineUsers),
-      ],
+  Future<_DashboardData> _fetchDashboard(String userId) async {
+    final results = await Future.wait([
+      ApiService.getLibrary(userId),
+      ApiService.getStats(userId),
+    ]);
+    return _DashboardData(
+      games: results[0] as List<ApiGame>,
+      stats: results[1] as LibraryStats,
     );
   }
+
+  void _retry() {
+    if (_userId != null) {
+      setState(() => _future = _fetchDashboard(_userId!));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final onlineUsers = mockUsers.where((u) => u.isOnline).take(4).toList();
+
+    if (_future == null) {
+      // Todavía cargando el userId de SharedPreferences
+      return const Center(
+        child: CircularProgressIndicator(color: _kYellow, strokeWidth: 2),
+      );
+    }
+
+    return FutureBuilder<_DashboardData>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: CircularProgressIndicator(color: _kYellow, strokeWidth: 2),
+          );
+        }
+        if (snapshot.hasError) {
+          return _ErrorState(error: snapshot.error.toString(), onRetry: _retry);
+        }
+
+        final data        = snapshot.data!;
+        final recentGames = data.games.take(4).toList();
+        final stats       = data.stats;
+
+        return ListView(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
+          children: [
+            const _SectionLabel(text: 'MIS ESTADÍSTICAS'),
+            const SizedBox(height: 12),
+            _StatsGrid(stats: stats),
+            const SizedBox(height: 32),
+
+            _SectionHeader(
+              title: 'Juegos Recientes',
+              actionLabel: 'Ver biblioteca',
+              onTap: () => widget.onNavigate?.call(1),
+            ),
+            const SizedBox(height: 14),
+
+            if (recentGames.isEmpty)
+              const _EmptyLibraryHint()
+            else
+              _RecentGamesGrid(games: recentGames),
+
+            const SizedBox(height: 32),
+            _SectionHeader(
+              title: 'Usuarios activos',
+              actionLabel: 'Ver comunidad',
+              onTap: () => widget.onNavigate?.call(3),
+            ),
+            const SizedBox(height: 14),
+            _ActiveUsersList(users: onlineUsers),
+          ],
+        );
+      },
+    );
+  }
+}
+
+// Agregado de datos del dashboard
+class _DashboardData {
+  final List<ApiGame>  games;
+  final LibraryStats   stats;
+  const _DashboardData({required this.games, required this.stats});
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -159,10 +219,17 @@ class _SectionHeader extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _StatsGrid extends StatelessWidget {
-  const _StatsGrid();
+  const _StatsGrid({required this.stats});
+  final LibraryStats stats;
 
   @override
   Widget build(BuildContext context) {
+    final data = [
+      _StatData(value: '${stats.total}',          description: 'Juegos en biblioteca'),
+      _StatData(value: '${stats.estimatedHours}', description: 'Horas estimadas'),
+      _StatData(value: '${stats.completed}',      description: 'Completados'),
+      _StatData(value: '${stats.backlog}',         description: 'Pendientes'),
+    ];
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -170,10 +237,10 @@ class _StatsGrid extends StatelessWidget {
         crossAxisCount: 2,
         crossAxisSpacing: 12,
         mainAxisSpacing: 12,
-        childAspectRatio: 1.4, // Más ancho que alto → sin overflow
+        childAspectRatio: 1.4,
       ),
-      itemCount: _stats.length,
-      itemBuilder: (_, i) => _StatCard(stat: _stats[i]),
+      itemCount: data.length,
+      itemBuilder: (_, i) => _StatCard(stat: data[i]),
     );
   }
 }
@@ -241,7 +308,7 @@ class _StatCard extends StatelessWidget {
 
 class _RecentGamesGrid extends StatelessWidget {
   const _RecentGamesGrid({required this.games});
-  final List<Game> games;
+  final List<ApiGame> games;
 
   @override
   Widget build(BuildContext context) {
@@ -249,124 +316,169 @@ class _RecentGamesGrid extends StatelessWidget {
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 10,
-        mainAxisSpacing: 10,
+        crossAxisCount: 2, crossAxisSpacing: 10, mainAxisSpacing: 10,
         childAspectRatio: 3 / 4,
       ),
       itemCount: games.length,
-      itemBuilder: (context, i) => _GameCard(game: games[i]),
+      itemBuilder: (context, i) => _ApiGameCard(game: games[i]),
     );
   }
 }
 
-class _GameCard extends StatelessWidget {
-  const _GameCard({required this.game});
-  final Game game;
+class _ApiGameCard extends StatelessWidget {
+  const _ApiGameCard({required this.game});
+  final ApiGame game;
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(builder: (_) => GameDetailScreen(game: game)),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: Container(
-          decoration: BoxDecoration(
-            color: _kBgCard,
-            border: Border.all(color: _kBorder),
-          ),
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // Portada del juego
-              Image.network(
-                game.cover,
-                fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) => Container(
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        decoration: BoxDecoration(color: _kBgCard, border: Border.all(color: _kBorder)),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.network(
+              game.coverUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                color: _kBgCard,
+                child: const Icon(Icons.sports_esports_rounded, color: _kBorder, size: 40),
+              ),
+              loadingBuilder: (_, child, progress) {
+                if (progress == null) return child;
+                return Container(
                   color: _kBgCard,
-                  child: const Icon(Icons.sports_esports_rounded,
-                      color: _kBorder, size: 40),
-                ),
-                loadingBuilder: (context, child, progress) {
-                  if (progress == null) return child;
-                  return Container(
-                    color: _kBgCard,
-                    child: const Center(
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: _kYellow,
-                      ),
-                    ),
-                  );
-                },
-              ),
-
-              // PC Req dot — esquina superior derecha
-              Positioned(
-                top: 8,
-                right: 8,
-                child: PcReqDot(pcReq: game.pcReq),
-              ),
-
-              // Overlay gradiente inferior con info
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                      colors: [Color(0xE6000000), Color(0x4D000000), Colors.transparent],
-                      stops: [0.0, 0.6, 1.0],
-                    ),
+                  child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: _kYellow)),
+                );
+              },
+            ),
+            Positioned(
+              bottom: 0, left: 0, right: 0,
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.bottomCenter, end: Alignment.topCenter,
+                    colors: [Color(0xE6000000), Color(0x4D000000), Colors.transparent],
+                    stops: [0.0, 0.6, 1.0],
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        game.title,
-                        style: GoogleFonts.inter(
-                          fontSize: 11,
-                          color: _kWhite,
-                          fontWeight: FontWeight.w600,
-                          height: 1.3,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 5),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          PlatformBadge(platform: game.platform),
-                          Row(
-                            children: [
-                              const Icon(Icons.schedule_rounded,
-                                  size: 9, color: _kMuted),
-                              const SizedBox(width: 2),
-                              Text(
-                                '${game.playtime}h',
-                                style: GoogleFonts.inter(
-                                    fontSize: 9, color: _kMuted),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(game.title,
+                        style: GoogleFonts.inter(fontSize: 11, color: _kWhite,
+                            fontWeight: FontWeight.w600, height: 1.3),
+                        maxLines: 2, overflow: TextOverflow.ellipsis),
+                    if (game.status != null) ...[
+                      const SizedBox(height: 3),
+                      _StatusBadge(status: game.status!),
                     ],
-                  ),
+                    if (game.hltbMainStory != null) ...[
+                      const SizedBox(height: 3),
+                      Row(children: [
+                        const Icon(Icons.schedule_rounded, size: 9, color: _kMuted),
+                        const SizedBox(width: 2),
+                        Text('${game.hltbMainStory!.toStringAsFixed(0)}h',
+                            style: GoogleFonts.inter(fontSize: 9, color: _kMuted)),
+                      ]),
+                    ],
+                  ],
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.status});
+  final String status;
+  Color get _color { switch (status) {
+    case 'Playing':   return const Color(0xFF4A6CF7);
+    case 'Completed': return const Color(0xFF4AF626);
+    case 'Abandoned': return const Color(0xFFFF4040);
+    default:          return const Color(0xFF8E8E8E);
+  }}
+  String get _label { switch (status) {
+    case 'Playing':   return 'Jugando';
+    case 'Completed': return 'Completado';
+    case 'Abandoned': return 'Abandonado';
+    default:          return 'Pendiente';
+  }}
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+      decoration: BoxDecoration(
+        color: _color.withValues(alpha: 0.2),
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(color: _color.withValues(alpha: 0.5)),
+      ),
+      child: Text(_label, style: GoogleFonts.inter(fontSize: 8, color: _color, fontWeight: FontWeight.w600)),
+    );
+  }
+}
+
+// Widget: biblioteca vacia (usuario nuevo)
+class _EmptyLibraryHint extends StatelessWidget {
+  const _EmptyLibraryHint();
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: _kBgCard, borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _kBorder),
+      ),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.library_add_rounded, color: _kYellow, size: 32),
+        const SizedBox(height: 12),
+        Text('Tu biblioteca está vacía',
+            style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: _kWhite),
+            textAlign: TextAlign.center),
+        const SizedBox(height: 6),
+        Text('Busca un juego y áñadelo para empezar.',
+            style: GoogleFonts.inter(fontSize: 11, color: _kMuted),
+            textAlign: TextAlign.center),
+      ]),
+    );
+  }
+}
+
+// Widget: estado de error con botono de reintentar
+class _ErrorState extends StatelessWidget {
+  const _ErrorState({required this.error, required this.onRetry});
+  final String error;
+  final VoidCallback onRetry;
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(padding: const EdgeInsets.all(32), child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.wifi_off_rounded, color: _kMuted, size: 40),
+        const SizedBox(height: 16),
+        Text('No se pudo conectar', style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w600, color: _kWhite)),
+        const SizedBox(height: 8),
+        Text(error, style: GoogleFonts.inter(fontSize: 11, color: _kMuted), textAlign: TextAlign.center),
+        const SizedBox(height: 20),
+        GestureDetector(
+          onTap: onRetry,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            decoration: BoxDecoration(
+              color: _kYellow.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: _kYellow.withValues(alpha: 0.4)),
+            ),
+            child: Text('Reintentar', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: _kYellow)),
+          ),
+        ),
+      ])),
     );
   }
 }

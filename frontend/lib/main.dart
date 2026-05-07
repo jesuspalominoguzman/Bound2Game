@@ -14,6 +14,7 @@ import 'screens/main_layout.dart';
 import 'screens/login_screen.dart';
 import 'screens/shake_selector_screen.dart';
 import 'theme/app_theme.dart';
+import 'services/auth_service.dart';
 
 /// Key global para navegación sin contexto
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -130,9 +131,8 @@ class AuthWrapper extends StatefulWidget {
 }
 
 class _AuthWrapperState extends State<AuthWrapper> {
-  // TODO(backend): Leer estado real de autenticación de Firebase/SharedPreferences.
-  // Por defecto, iniciamos con la pantalla de Login para probar el bypass.
-  bool _isLoggedIn = false;
+  // null = cargando, true = autenticado, false = no autenticado
+  bool? _isLoggedIn;
 
   @override
   void initState() {
@@ -141,18 +141,25 @@ class _AuthWrapperState extends State<AuthWrapper> {
   }
 
   Future<void> _checkAuthStatus() async {
-    // Simular carga de token
-    await Future.delayed(const Duration(milliseconds: 500));
-    // setState(() => _isLoggedIn = ...);
+    final loggedIn = await AuthService.isLoggedIn();
+    if (mounted) setState(() => _isLoggedIn = loggedIn);
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoggedIn) {
-      return const MainLayout();
-    } else {
-      return const LoginScreen();
+    // Mientras carga el estado de sesión mostramos un splash mínimo
+    if (_isLoggedIn == null) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF292929),
+        body: Center(
+          child: CircularProgressIndicator(
+            color: Color(0xFFFFB800),
+            strokeWidth: 2.5,
+          ),
+        ),
+      );
     }
+    return _isLoggedIn! ? const MainLayout() : const LoginScreen();
   }
 }
 

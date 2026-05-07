@@ -18,9 +18,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import 'main_layout.dart';
-
-// ── Paleta (Ahora importada de app_theme.dart) ──────────────────────────────
 import '../theme/app_theme.dart';
+import '../services/api_service.dart';
+// auth_service es usado internamente por api_service.dart (saveSession)
 
 // ── Carátulas ─────────────────────────────────────────────────────────────────
 const List<String> _covers = [
@@ -92,6 +92,7 @@ class _LoginScreenState extends State<LoginScreen>
   bool _isEmailFocused = false;
   bool _isPassFocused  = false;
   bool _isUserFocused  = false;
+  bool _isLoading      = false;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -217,9 +218,54 @@ class _LoginScreenState extends State<LoginScreen>
 
   void _toggleMode() => setState(() => _isLogin = !_isLogin);
 
-  void _submit() {
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const MainLayout()),
+  Future<void> _submit() async {
+    if (_isLoading) return;
+    final email    = _emailCtrl.text.trim();
+    final password = _passCtrl.text.trim();
+    final username = _userCtrl.text.trim();
+
+    // Validación mínima en cliente
+    if (email.isEmpty || password.isEmpty) {
+      _showError('Por favor, completa todos los campos.');
+      return;
+    }
+    if (!_isLogin && username.isEmpty) {
+      _showError('Introduce un nombre de usuario.');
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      if (_isLogin) {
+        await ApiService.login(email, password);
+      } else {
+        await ApiService.register(username, email, password);
+        // Tras registrarse hacemos login automático
+        await ApiService.login(email, password);
+      }
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const MainLayout()),
+      );
+    } on ApiException catch (e) {
+      _showError(e.message);
+    } catch (_) {
+      _showError('No se puede conectar con el servidor. Verifica tu red.');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(msg, style: const TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFFCC3333),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+        duration: const Duration(seconds: 4),
+      ),
     );
   }
 
@@ -399,6 +445,7 @@ class _LoginScreenState extends State<LoginScreen>
 
                       _SubmitButton(
                         label: _isLogin ? 'Iniciar Sesión' : 'Crear Cuenta',
+                        isLoading: _isLoading,
                         onTap: _submit,
                       ),
 
@@ -446,9 +493,14 @@ class _LoginScreenState extends State<LoginScreen>
 // =============================================================================
 
 class _SubmitButton extends StatefulWidget {
-  const _SubmitButton({required this.label, required this.onTap});
-  final String label;
+  const _SubmitButton({
+    required this.label,
+    required this.onTap,
+    this.isLoading = false,
+  });
+  final String   label;
   final VoidCallback onTap;
+  final bool isLoading;
   @override
   State<_SubmitButton> createState() => _SubmitButtonState();
 }
@@ -459,9 +511,9 @@ class _SubmitButtonState extends State<_SubmitButton> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: (_) => setState(() => _pressed = true),
-      onTapUp: (_) { setState(() => _pressed = false); widget.onTap(); },
-      onTapCancel: () => setState(() => _pressed = false),
+      onTapDown: widget.isLoading ? null : (_) => setState(() => _pressed = true),
+      onTapUp: widget.isLoading ? null : (_) { setState(() => _pressed = false); widget.onTap(); },
+      onTapCancel: widget.isLoading ? null : () => setState(() => _pressed = false),
       child: AnimatedScale(
         scale: _pressed ? 0.97 : 1.0,
         duration: const Duration(milliseconds: 90),
@@ -470,7 +522,7 @@ class _SubmitButtonState extends State<_SubmitButton> {
           height: 50,
           decoration: BoxDecoration(
             gradient: LinearGradient(
-              colors: _pressed
+              colors: (_pressed || widget.isLoading)
                   ? [AppColors.accentDark, AppColors.accentDark]
                   : [AppColors.accentDark, AppColors.accent],
               begin: Alignment.topLeft,
@@ -486,19 +538,27 @@ class _SubmitButtonState extends State<_SubmitButton> {
             ],
           ),
           child: Center(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 180),
-              child: Text(
-                widget.label,
-                key: ValueKey(widget.label),
-                style: GoogleFonts.outfit(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: Colors.black,
-                  letterSpacing: 0.6,
-                ),
-              ),
-            ),
+            child: widget.isLoading
+                ? const SizedBox(
+                    width: 20, height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.5,
+                      color: Colors.black,
+                    ),
+                  )
+                : AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 180),
+                    child: Text(
+                      widget.label,
+                      key: ValueKey(widget.label),
+                      style: GoogleFonts.outfit(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.black,
+                        letterSpacing: 0.6,
+                      ),
+                    ),
+                  ),
           ),
         ),
       ),

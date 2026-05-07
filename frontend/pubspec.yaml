@@ -39,11 +39,17 @@ dependencies:
 
   # Persistencia local — filtros de tiendas y preferencias de notificaciones.
   shared_preferences: ^2.3.2
+
+  # Cliente HTTP para llamadas REST al backend de Bound2Game.
+  http: ^1.2.2
   sensors_plus: ^7.0.0
 
   # ── Fase III: Módulo Social & Chat ─────────────────────────────────────────
   # Cliente WebSocket para el chat en tiempo real con Socket.io.
   socket_io_client: ^2.0.3+1
+
+  # Renderizado de archivos SVG (logos de tiendas de Wikipedia, etc.)
+  flutter_svg: ^2.0.10+1
 
   # Buscador y selector de GIFs integrado con la API de Giphy.
   giphy_get: ^3.6.1+1

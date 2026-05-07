@@ -37,7 +37,6 @@ enum DealStore {
   psStore,
   xbox,
   nintendo,
-  gog,
   instantGaming;
 
   DealStoreConfig get config => DealStoreConfig.of(this);
@@ -99,13 +98,6 @@ class DealStoreConfig {
           background: const Color(0xFFE60012).withValues(alpha: 0.12),
           icon: Icons.videogame_asset_rounded,
         );
-      case DealStore.gog:
-        return DealStoreConfig(
-          name: 'GOG', shortName: 'GOG',
-          color: const Color(0xFFA855F7),
-          background: const Color(0xFFA855F7).withValues(alpha: 0.12),
-          icon: Icons.public_rounded,
-        );
       case DealStore.instantGaming:
         return DealStoreConfig(
           name: 'Instant Gaming', shortName: 'IG',
@@ -149,6 +141,45 @@ class GameDeal {
     this.genre,
     this.playerMode,
   });
+
+  // ── Factory: construir desde la respuesta del backend (ApiDeal normalizado) ──
+  /// Mapea la clave `store` del backend (ej. "steam", "epic") al enum [DealStore].
+  factory GameDeal.fromApiJson(Map<String, dynamic> json) {
+    final storeStr = json['store']?.toString() ?? 'steam';
+    final store = _storeFromString(storeStr);
+    final double origPrice = _toDouble(json['originalPrice']);
+    final double salePrice = _toDouble(json['salePrice']);
+
+    return GameDeal(
+      gameId:          json['gameId']?.toString()    ?? '',
+      gameTitle:       json['gameTitle']?.toString()  ?? 'Unknown',
+      gameCover:       json['gameCover']?.toString(),
+      store:           store,
+      originalPrice:   origPrice,
+      salePrice:       salePrice,
+      discountPercent: (json['discountPercent'] as num?)?.toInt() ?? 0,
+      isFree:          json['isFree'] == true,
+      dealUrl:         json['dealUrl']?.toString(),
+    );
+  }
+
+  static DealStore _storeFromString(String s) {
+    switch (s.toLowerCase()) {
+      case 'epic':          return DealStore.epic;
+      case 'psstore':       return DealStore.psStore;
+      case 'xbox':          return DealStore.xbox;
+      case 'nintendo':      return DealStore.nintendo;
+      case 'instantgaming': return DealStore.instantGaming;
+      default:              return DealStore.steam;
+    }
+  }
+
+  static double _toDouble(dynamic v) {
+    if (v == null) return 0;
+    if (v is num) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0;
+  }
+
 
   GameDeal copyWith({
     String? gameId, String? gameTitle, String? gameCover, DealStore? store,
@@ -275,15 +306,6 @@ final List<GameDeal> sampleDeals = [
     store: DealStore.psStore, originalPrice: 49.99, salePrice: 19.99,
     discountPercent: 60, isFree: false, genre: 'Acción', playerMode: PlayerMode.solo),
 
-  // GOG
-  GameDeal(gameId: '17', gameTitle: "Baldur's Gate 3",
-    gameCover: 'https://images.unsplash.com/photo-1670888741735-f69bb3f7f4ed?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.gog, originalPrice: 59.99, salePrice: 35.99,
-    discountPercent: 40, isFree: false, genre: 'RPG', playerMode: PlayerMode.both),
-  GameDeal(gameId: '18', gameTitle: 'Disco Elysium',
-    gameCover: 'https://images.unsplash.com/photo-1615679591400-93db7ead06d4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.gog, originalPrice: 39.99, salePrice: 9.99,
-    discountPercent: 75, isFree: false, genre: 'RPG', playerMode: PlayerMode.solo),
 
   // Instant Gaming
   GameDeal(gameId: '19', gameTitle: 'Counter-Strike 2',

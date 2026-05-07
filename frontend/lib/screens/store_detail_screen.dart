@@ -8,6 +8,7 @@ import '../models/deal_model.dart';
 import '../models/game_model.dart';
 import '../widgets/discount_badge.dart';
 import '../widgets/advanced_filters_modal.dart';
+import '../widgets/store_logo.dart';
 import 'game_detail_screen.dart';
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
@@ -119,8 +120,9 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
           // ── AppBar con color de tienda ───────────────────────────────────
           SliverAppBar(
             pinned: true,
-            expandedHeight: 130,
+            expandedHeight: 150,
             backgroundColor: _bg,
+            // ── Acciones (filtros) ──────────────────────────────────────────
             actions: [
               IconButton(
                 icon: const Icon(Icons.filter_list_rounded, color: Colors.white),
@@ -137,6 +139,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                 },
               ),
             ],
+            // ── Botón atrás ─────────────────────────────────────────────────
             leading: GestureDetector(
               onTap: () => Navigator.of(context).pop(),
               child: Container(
@@ -149,51 +152,75 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                     color: Colors.white, size: 20),
               ),
             ),
+            // ── Branding centrado en el área expandida ───────────────────────
+            // NO usamos 'title' de FlexibleSpaceBar para evitar el conflicto
+            // con el leading. Todo el branding va dentro de 'background'.
             flexibleSpace: FlexibleSpaceBar(
-              titlePadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-              title: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
+              background: Stack(
+                fit: StackFit.expand,
                 children: [
+                  // Gradiente de fondo
                   Container(
-                    padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: _cfg.color.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Icon(_cfg.icon, color: _cfg.color, size: 14),
-                  ),
-                  const SizedBox(width: 8),
-                  Flexible(
-                    child: Text(
-                      _cfg.name,
-                      style: const TextStyle(
-                        fontSize: 15, fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          _cfg.color.withValues(alpha: 0.25),
+                          _bg,
+                        ],
                       ),
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    '${sampleDeals.where((d) => d.store == _store).length} ofertas',
-                    style: TextStyle(
-                      fontSize: 10, color: _cfg.color,
-                      fontWeight: FontWeight.w600,
+
+                  // Branding centrado — con padding superior para respetar
+                  // la AppBar colapsada (≈ kToolbarHeight = 56px)
+                  Positioned(
+                    bottom: 16,
+                    left: 0,
+                    right: 0,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Logo real de la tienda
+                        Container(
+                          width: 52,
+                          height: 52,
+                          decoration: BoxDecoration(
+                            color: _cfg.color.withValues(alpha: 0.18),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: Center(
+                            child: StoreLogoWidget(store: widget.store, size: 32),
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        // Nombre de la tienda
+                        Text(
+                          _cfg.name,
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                            color: Colors.white,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+
+                        // Contador de ofertas
+                        Text(
+                          '${sampleDeals.where((d) => d.store == _store).length} ofertas disponibles',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: _cfg.color,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
-              ),
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [
-                      _cfg.color.withValues(alpha: 0.25),
-                      _bg,
-                    ],
-                  ),
-                ),
               ),
             ),
           ),

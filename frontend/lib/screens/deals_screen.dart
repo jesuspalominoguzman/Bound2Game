@@ -14,9 +14,10 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/deal_model.dart';
 import '../models/game_model.dart';
-import '../widgets/discount_badge.dart';
 import 'game_detail_screen.dart';
 import 'store_detail_screen.dart';
+import '../widgets/store_logo.dart';
+import '../services/api_service.dart';
 
 // ── Color tokens ──────────────────────────────────────────────────────────────
 const _bg      = Color(0xFF0A0A0A);
@@ -72,9 +73,23 @@ class DealsScreen extends StatefulWidget {
 class _DealsScreenState extends State<DealsScreen> {
   final Set<String> _wishlist = {};
 
-  // Hero = únicamente juegos gratuitos
-  List<GameDeal> get _heroDeals {
-    return sampleDeals.where((d) => d.isFree).toList();
+  // Carga los juegos gratuitos del backend en lugar de filtrar sampleDeals
+  late final Future<List<GameDeal>> _freeGamesFuture = _loadFreeGames();
+
+  Future<List<GameDeal>> _loadFreeGames() async {
+    final apiDeals = await ApiService.getFreeGames();
+    // Convertir ApiDeal → GameDeal para reusar _HeroCarousel
+    return apiDeals.map((d) => GameDeal.fromApiJson({
+      'gameId':          d.gameId,
+      'gameTitle':       d.gameTitle,
+      'gameCover':       d.gameCover,
+      'store':           d.store,
+      'originalPrice':   d.originalPrice,
+      'salePrice':       d.salePrice,
+      'discountPercent': d.discountPercent,
+      'isFree':          d.isFree,
+      'dealUrl':         d.dealUrl,
+    })).toList();
   }
 
   void _toggleWishlist(String id) =>
@@ -88,24 +103,39 @@ class _DealsScreenState extends State<DealsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final heroes = _heroDeals;
     return Scaffold(
       backgroundColor: _bg,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
-          // ── 1. Hero Carousel (Solo juegos gratuitos) ────────────────────
+          // ── 1. Hero Carousel (juegos gratuitos reales) ───────────────────────────
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.only(top: 20),
-              child: _HeroCarousel(
-                deals: heroes,
-                onTap: _openGame,
+              child: FutureBuilder<List<GameDeal>>(
+                future: _freeGamesFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const SizedBox(
+                      height: 260,
+                      child: Center(
+                        child: CircularProgressIndicator(color: _green, strokeWidth: 2),
+                      ),
+                    );
+                  }
+                  if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
+                    // Fallback silencioso: muestra los deals locales si el backend falla
+                    final fallback = sampleDeals.where((d) => d.isFree).toList();
+                    if (fallback.isEmpty) return const SizedBox.shrink();
+                    return _HeroCarousel(deals: fallback, onTap: _openGame);
+                  }
+                  return _HeroCarousel(deals: snapshot.data!, onTap: _openGame);
+                },
               ),
             ),
           ),
 
-          // ── 2. Timeline próximos lanzamientos ───────────────────────────
+          // ── 2. Timeline próximos lanzamientos ───────────────────────────────────
           SliverToBoxAdapter(
             child: _UpcomingSection(
               wishlist: _wishlist,
@@ -113,7 +143,7 @@ class _DealsScreenState extends State<DealsScreen> {
             ),
           ),
 
-          // ── 3. Explorar por tienda ───────────────────────────────────────
+          // ── 3. Explorar por tienda ──────────────────────────────────────────────
           SliverToBoxAdapter(
             child: _StoreSection(),
           ),
@@ -676,13 +706,7 @@ class _StoreCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Center(
-                  child: store == DealStore.steam
-                      ? Image.asset('assets/images/steam_logo.jpeg', width: 24, height: 24, fit: BoxFit.contain)
-                      : store == DealStore.epic
-                          ? Image.asset('assets/images/epic_logo.jpeg', width: 24, height: 24, fit: BoxFit.contain)
-                          : store == DealStore.instantGaming
-                              ? Image.asset('assets/images/instant_logo.png', width: 24, height: 24, fit: BoxFit.contain)
-                              : Icon(cfg.icon, color: cfg.color, size: 19),
+                  child: StoreLogoWidget(store: store, size: 24),
                 ),
               ),
               const SizedBox(width: 10),

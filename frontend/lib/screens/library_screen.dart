@@ -15,6 +15,8 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/game_model.dart';
 import '../widgets/game_library_card.dart';
 import '../widgets/advanced_filters_modal.dart';
+import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import 'game_detail_screen.dart';
 import 'shake_selector_screen.dart';
 
@@ -26,20 +28,6 @@ const _kYellow  = Color(0xFFFFB800);
 const _kWhite   = Color(0xFFFFFFFF);
 const _kMuted   = Color(0xFF888888);
 const _kSub     = Color(0xFF555555);
-
-// =============================================================================
-// CAPA DE DATOS MOCK
-//
-// TODO(backend): Reemplazar `_mockGames` por una llamada al servicio real:
-//
-//   Future<List<Game>> _loadGames() async {
-//     return GameService.fetchLibrary(userId: currentUser.id);
-//   }
-//
-// Y envolver el GridView en un FutureBuilder<List<Game>>.
-// =============================================================================
-
-final List<Game> _mockGames = sampleGames;
 
 // =============================================================================
 // LIBRARY SCREEN
@@ -54,6 +42,11 @@ class LibraryScreen extends StatefulWidget {
 
 class _LibraryScreenState extends State<LibraryScreen>
     with SingleTickerProviderStateMixin {
+
+  // ── Datos reales del backend ─────────────────────────────────────────────────
+  List<Game> _allGames = [];
+  bool _isLoading = true;
+  String? _loadError;
 
   // ── Estado de búsqueda ────────────────────────────────────────────────────
   final TextEditingController _searchCtrl  = TextEditingController();
@@ -109,8 +102,8 @@ class _LibraryScreenState extends State<LibraryScreen>
     return tags;
   }
 
-  // ── Géneros disponibles (derivado de los datos) ────────────────────────────
-  List<String> get _availableGenres => _mockGames
+  // ── Géneros disponibles (derivado de los datos reales) ──────────────────────
+  List<String> get _availableGenres => _allGames
       .map((g) => g.genre)
       .toSet()
       .toList()
@@ -118,16 +111,10 @@ class _LibraryScreenState extends State<LibraryScreen>
 
   // ── Juegos filtrados (computed) ────────────────────────────────────────────
   List<Game> get _filteredGames {
-    // 1. Texto de búsqueda
-    var result = _mockGames.where((game) {
+    var result = _allGames.where((game) {
       return _searchQuery.isEmpty ||
           game.title.toLowerCase().contains(_searchQuery);
     }).toList();
-
-    // 2. Filtros avanzados
-    if (!_filters.isEmpty) {
-      result = _filters.apply(result);
-    }
 
     return result;
   }
@@ -141,6 +128,56 @@ class _LibraryScreenState extends State<LibraryScreen>
     );
     _searchFocus.addListener(
       () => setState(() => _isSearchFocused = _searchFocus.hasFocus),
+    );
+    _loadLibrary();
+  }
+
+  Future<void> _loadLibrary() async {
+    setState(() { _isLoading = true; _loadError = null; });
+    try {
+      final user = await AuthService.getCurrentUser();
+      if (user == null) {
+        if (mounted) setState(() { _isLoading = false; _allGames = []; });
+        return;
+      }
+      final apiGames = await ApiService.getLibrary(user.id);
+      final games = apiGames.map(_apiGameToLocal).toList();
+      if (mounted) setState(() { _allGames = games; _isLoading = false; });
+    } catch (e) {
+      if (mounted) setState(() { _loadError = e.toString(); _isLoading = false; });
+    }
+  }
+
+  static Game _apiGameToLocal(ApiGame api) {
+    Platform platform;
+    switch ((api.platform ?? 'Steam').toLowerCase()) {
+      case 'epic': platform = Platform.epic; break;
+      case 'instant gaming': platform = Platform.ig; break;
+      default: platform = Platform.steam;
+    }
+    GameStatus status;
+    switch (api.status ?? 'Backlog') {
+      case 'Playing':   status = GameStatus.playing;   break;
+      case 'Completed': status = GameStatus.completed; break;
+      case 'Abandoned': status = GameStatus.abandoned; break;
+      default:          status = GameStatus.unplayed;
+    }
+    return Game(
+      id:           api.id.hashCode,
+      title:        api.title,
+      platform:     platform,
+      genre:        'Varios',
+      playtime:     0,
+      status:       status,
+      cover:        api.coverUrl,
+      pcReq:        PcReq.green,
+      hasCosmetics: false,
+      price:        0,
+      year:         DateTime.now().year,
+      hltb: HltbTimes(
+        main:          api.hltbMainStory?.round(),
+        completionist: api.hltbCompletionist?.round(),
+      ),
     );
   }
 
@@ -183,24 +220,53 @@ class _LibraryScreenState extends State<LibraryScreen>
 
   @override
   Widget build(BuildContext context) {
+    // Estado de carga
+    if (_isLoading) {
+      return const Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFFFFB800), strokeWidth: 2,
+        ),
+      );
+    }
+    // Estado de error
+    if (_loadError != null) {
+      return Center(child: Padding(padding: const EdgeInsets.all(32), child: Column(mainAxisSize: MainAxisSize.min, children: [
+        const Icon(Icons.wifi_off_rounded, color: Color(0xFF555555), size: 40),
+        const SizedBox(height: 16),
+        Text('No se pudo cargar la biblioteca', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+        const SizedBox(height: 8),
+        Text(_loadError!, style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFFAAAAAA)), textAlign: TextAlign.center),
+        const SizedBox(height: 20),
+        GestureDetector(
+          onTap: _loadLibrary,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFFFB800).withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: const Color(0xFFFFB800).withValues(alpha: 0.4)),
+            ),
+            child: Text('Reintentar', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFFFFB800))),
+          ),
+        ),
+      ])));
+    }
+
     final filtered = _filteredGames;
 
     return Stack(
       children: [
         Column(
           children: [
-            // ── Barra superior ─────────────────────────────────────────────
             _LibraryTopBar(
               searchCtrl:       _searchCtrl,
               searchFocus:      _searchFocus,
               isSearchFocused:  _isSearchFocused,
-              totalGames:       _mockGames.length,
+              totalGames:       _allGames.length,
               filteredCount:    filtered.length,
               activeTags:       _activeFilterTags,
               onFilterTap:      _openFilters,
             ),
-
-            // ── Grid de juegos ─────────────────────────────────────────────
             Expanded(
               child: filtered.isEmpty
                   ? _EmptyState(query: _searchQuery)
