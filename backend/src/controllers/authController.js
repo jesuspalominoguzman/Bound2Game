@@ -1,4 +1,5 @@
 const authService = require('../services/authService');
+const User = require('../models/User'); // Importamos el modelo User para la ruta de perfil
 
 /**
  * POST /api/auth/register
@@ -54,7 +55,34 @@ const login = async (req, res) => {
     }
 };
 
+/**
+ * GET /api/auth/profile
+ * Ruta protegida. Requiere que el usuario esté autenticado.
+ */
+const getProfile = async (req, res) => {
+    try {
+        // req.user contiene el id y el username que metimos en el token (ver authMiddleware)
+        const userId = req.user.id;
+
+        // Buscamos el usuario en la BD excluyendo la contraseña (-password)
+        const user = await User.findById(userId).select('-password');
+
+        if (!user) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        return res.status(200).json({
+            message: 'Perfil recuperado con éxito',
+            user: user
+        });
+    } catch (error) {
+        console.error('Error en getProfile:', error);
+        return res.status(500).json({ error: 'Error interno al recuperar el perfil' });
+    }
+};
+
 module.exports = {
     register,
-    login
+    login,
+    getProfile
 };
