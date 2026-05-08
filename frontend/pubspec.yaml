@@ -43,6 +43,8 @@ dependencies:
   # Cliente HTTP para llamadas REST al backend de Bound2Game.
   http: ^1.2.2
   sensors_plus: ^7.0.0
+  http: ^1.6.0
+  flutter_dotenv: ^6.0.1
 
   # ── Fase III: Módulo Social & Chat ─────────────────────────────────────────
   # Cliente WebSocket para el chat en tiempo real con Socket.io.
@@ -80,6 +82,7 @@ flutter:
   # To add assets to your application, add an assets section, like this:
   assets:
     - assets/images/
+    - .env
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

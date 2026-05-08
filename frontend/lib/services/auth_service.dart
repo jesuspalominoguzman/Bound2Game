@@ -32,21 +32,21 @@ class AuthUser {
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
     return AuthUser(
-      id:            json['id']?.toString()       ?? json['_id']?.toString() ?? '',
-      username:      json['username']?.toString()  ?? '',
-      email:         json['email']?.toString()     ?? '',
-      avatarUrl:     json['avatarUrl']?.toString() ?? '',
-      reputation:    (json['reputation']   as Map<String, dynamic>?) ?? {},
+      id: json['id']?.toString() ?? json['_id']?.toString() ?? '',
+      username: json['username']?.toString() ?? '',
+      email: json['email']?.toString() ?? '',
+      avatarUrl: json['avatarUrl']?.toString() ?? '',
+      reputation: (json['reputation'] as Map<String, dynamic>?) ?? {},
       hardwareSpecs: (json['hardwareSpecs'] as Map<String, dynamic>?) ?? {},
     );
   }
 
   Map<String, dynamic> toJson() => {
-    'id':            id,
-    'username':      username,
-    'email':         email,
-    'avatarUrl':     avatarUrl,
-    'reputation':    reputation,
+    'id': id,
+    'username': username,
+    'email': email,
+    'avatarUrl': avatarUrl,
+    'reputation': reputation,
     'hardwareSpecs': hardwareSpecs,
   };
 }
@@ -56,7 +56,7 @@ class AuthUser {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class AuthSession {
-  final String   token;
+  final String token;
   final AuthUser user;
 
   const AuthSession({required this.token, required this.user});
@@ -68,7 +68,7 @@ class AuthSession {
 
 class AuthService {
   static const _kToken = 'b2g_auth_token';
-  static const _kUser  = 'b2g_auth_user';
+  static const _kUser = 'b2g_auth_user';
 
   // ── Guardar sesión tras login/register ──────────────────────────────────────
   static Future<void> saveSession(String token, AuthUser user) async {

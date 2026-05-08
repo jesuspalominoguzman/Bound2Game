@@ -39,8 +39,8 @@ const List<String> _covers = [
 // ── Fases ─────────────────────────────────────────────────────────────────────
 // Tamaños del AnimatedContainer por fase
 const double _logoSize = 350.0; // Fase 1: Colosal y céntrico
-const double _cardW    = 150.0; // Fases 2/3/4: ancho normal
-const double _cardH    = 220.0; // Fases 2/3/4: alto normal
+const double _cardW = 150.0; // Fases 2/3/4: ancho normal
+const double _cardH = 220.0; // Fases 2/3/4: alto normal
 
 // Velocidad de rebote
 const double _speed = 180.0; // px/s
@@ -54,7 +54,6 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen>
     with SingleTickerProviderStateMixin {
-
   // ── Máquina de estados ────────────────────────────────────────────────────
   int _phase = 1; // 1=centro, 2=z-depth, 3=espera, 4=arranque/movimiento
 
@@ -75,7 +74,7 @@ class _LoginScreenState extends State<LoginScreen>
   final _rng = Random();
   AnimationController? _movementController;
   Duration _lastTime = Duration.zero;
-  
+
   Timer? _timerPhase2;
   Timer? _timerPhase3;
   Timer? _timerPhase4;
@@ -83,16 +82,17 @@ class _LoginScreenState extends State<LoginScreen>
   // ── Formulario ─────────────────────────────────────────────────────────────
   double _formOpacity = 0.0;
   bool _isLogin = true;
-  final _emailCtrl  = TextEditingController();
-  final _passCtrl   = TextEditingController();
-  final _userCtrl   = TextEditingController();
+  bool _isLoading = false;
+  final _emailCtrl = TextEditingController();
+  final _passCtrl = TextEditingController();
+  final _userCtrl = TextEditingController();
   final _emailFocus = FocusNode();
-  final _passFocus  = FocusNode();
-  final _userFocus  = FocusNode();
+  final _passFocus = FocusNode();
+  final _userFocus = FocusNode();
   bool _isEmailFocused = false;
-  bool _isPassFocused  = false;
-  bool _isUserFocused  = false;
-  bool _isLoading      = false;
+  bool _isPassFocused = false;
+  bool _isUserFocused = false;
+  bool _isLoading = false;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -100,9 +100,15 @@ class _LoginScreenState extends State<LoginScreen>
   void initState() {
     super.initState();
 
-    _emailFocus.addListener(() => setState(() => _isEmailFocused = _emailFocus.hasFocus));
-    _passFocus .addListener(() => setState(() => _isPassFocused  = _passFocus .hasFocus));
-    _userFocus .addListener(() => setState(() => _isUserFocused  = _userFocus .hasFocus));
+    _emailFocus.addListener(
+      () => setState(() => _isEmailFocused = _emailFocus.hasFocus),
+    );
+    _passFocus.addListener(
+      () => setState(() => _isPassFocused = _passFocus.hasFocus),
+    );
+    _userFocus.addListener(
+      () => setState(() => _isUserFocused = _userFocus.hasFocus),
+    );
 
     _movementController = AnimationController(
       vsync: this,
@@ -115,7 +121,8 @@ class _LoginScreenState extends State<LoginScreen>
       setState(() {
         _phase = 2;
         _formOpacity = 1.0;
-        _coverUrl = _covers[_rng.nextInt(_covers.length)]; // Inicia el crossfade
+        _coverUrl =
+            _covers[_rng.nextInt(_covers.length)]; // Inicia el crossfade
       });
     });
 
@@ -149,8 +156,12 @@ class _LoginScreenState extends State<LoginScreen>
     _movementController?.dispose();
     _timerPhase2?.cancel();
     _timerPhase3?.cancel();
-    _emailCtrl.dispose(); _passCtrl.dispose(); _userCtrl.dispose();
-    _emailFocus.dispose(); _passFocus.dispose(); _userFocus.dispose();
+    _emailCtrl.dispose();
+    _passCtrl.dispose();
+    _userCtrl.dispose();
+    _emailFocus.dispose();
+    _passFocus.dispose();
+    _userFocus.dispose();
     super.dispose();
   }
 
@@ -185,7 +196,7 @@ class _LoginScreenState extends State<LoginScreen>
     }
 
     final size = MediaQuery.of(context).size;
-    final maxX = size.width  - _cardW;
+    final maxX = size.width - _cardW;
     final maxY = size.height - _cardH;
 
     double mag = sqrt(_dx * _dx + _dy * _dy);
@@ -197,10 +208,26 @@ class _LoginScreenState extends State<LoginScreen>
       double ny = _y + dirY * _currentSpeed * dt;
       bool collided = false;
 
-      if (nx < 0)    { nx = 0;    dirX =  dirX.abs(); collided = true; }
-      if (nx > maxX) { nx = maxX; dirX = -dirX.abs(); collided = true; }
-      if (ny < 0)    { ny = 0;    dirY =  dirY.abs(); collided = true; }
-      if (ny > maxY) { ny = maxY; dirY = -dirY.abs(); collided = true; }
+      if (nx < 0) {
+        nx = 0;
+        dirX = dirX.abs();
+        collided = true;
+      }
+      if (nx > maxX) {
+        nx = maxX;
+        dirX = -dirX.abs();
+        collided = true;
+      }
+      if (ny < 0) {
+        ny = 0;
+        dirY = dirY.abs();
+        collided = true;
+      }
+      if (ny > maxY) {
+        ny = maxY;
+        dirY = -dirY.abs();
+        collided = true;
+      }
 
       if (collided) {
         String next;
@@ -212,7 +239,10 @@ class _LoginScreenState extends State<LoginScreen>
 
       _dx = dirX;
       _dy = dirY;
-      setState(() { _x = nx; _y = ny; });
+      setState(() {
+        _x = nx;
+        _y = ny;
+      });
     }
   }
 
@@ -220,7 +250,7 @@ class _LoginScreenState extends State<LoginScreen>
 
   Future<void> _submit() async {
     if (_isLoading) return;
-    final email    = _emailCtrl.text.trim();
+    final email = _emailCtrl.text.trim();
     final password = _passCtrl.text.trim();
     final username = _userCtrl.text.trim();
 
@@ -244,9 +274,9 @@ class _LoginScreenState extends State<LoginScreen>
         await ApiService.login(email, password);
       }
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const MainLayout()),
-      );
+      Navigator.of(
+        context,
+      ).pushReplacement(MaterialPageRoute(builder: (_) => const MainLayout()));
     } on ApiException catch (e) {
       _showError(e.message);
     } catch (_) {
@@ -274,9 +304,10 @@ class _LoginScreenState extends State<LoginScreen>
   @override
   Widget build(BuildContext context) {
     // Propiedades del AnimatedContainer según la fase
-    final double cW         = _phase == 1 ? _logoSize : _cardW;
-    final double cH         = _phase == 1 ? _logoSize : _cardH;
-    final Color  cardBg     = Colors.transparent; // Sin fondo residual, solo la carátula
+    final double cW = _phase == 1 ? _logoSize : _cardW;
+    final double cH = _phase == 1 ? _logoSize : _cardH;
+    final Color cardBg =
+        Colors.transparent; // Sin fondo residual, solo la carátula
     final double cardRadius = _phase == 1 ? 0.0 : 16.0;
 
     // Asegurar centrado ÚNICAMENTE durante la Fase 2
@@ -294,193 +325,209 @@ class _LoginScreenState extends State<LoginScreen>
       body: SizedBox.expand(
         child: Stack(
           children: [
+            // ── CAPA 1: Fondo negro (Scaffold) ───────────────────────────────
 
-          // ── CAPA 1: Fondo negro (Scaffold) ───────────────────────────────
-
-          // ── CAPA 2: Elemento morphing ─────────────────────────────────────
-          AnimatedPositioned(
-            duration: _phase == 2 ? const Duration(milliseconds: 1400) : Duration.zero,
-            curve: Curves.easeInOutCubic,
-            left: _x,
-            top: _y,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 1400),
+            // ── CAPA 2: Elemento morphing ─────────────────────────────────────
+            AnimatedPositioned(
+              duration: _phase == 2
+                  ? const Duration(milliseconds: 1400)
+                  : Duration.zero,
               curve: Curves.easeInOutCubic,
-              width: cW,
-              height: cH,
-              clipBehavior: Clip.antiAlias,
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(cardRadius),
-                boxShadow: _phase == 1
-                    ? null
-                    : [
-                        BoxShadow(
-                          color: Colors.black.withValues(alpha: 0.6),
-                          blurRadius: 8,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-              ),
-              child: AnimatedSwitcher(
-                duration: _phase == 2 ? const Duration(milliseconds: 1400) : const Duration(milliseconds: 250),
-                switchInCurve: Curves.easeInOutCubic,
-                switchOutCurve: Curves.easeInOutCubic,
-                child: _coverUrl == null
-                    ? Image.asset(
-                        'assets/images/logo.png',
-                        key: const ValueKey('logo'),
-                        width: double.infinity,
-                        height: double.infinity,
-                        fit: BoxFit.contain,
-                        filterQuality: FilterQuality.high,
-                        errorBuilder: (ctx, e, st) => const Icon(
-                          Icons.videogame_asset_rounded,
-                          color: AppColors.accent, size: 48,
-                        ),
-                      )
-                    : Container(
-                        key: ValueKey(_coverUrl),
-                        width: double.infinity,
-                        height: double.infinity,
-                        decoration: BoxDecoration(
-                          image: DecorationImage(
-                            image: NetworkImage(_coverUrl!),
-                            fit: BoxFit.cover,
+              left: _x,
+              top: _y,
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 1400),
+                curve: Curves.easeInOutCubic,
+                width: cW,
+                height: cH,
+                clipBehavior: Clip.antiAlias,
+                decoration: BoxDecoration(
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(cardRadius),
+                  boxShadow: _phase == 1
+                      ? null
+                      : [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            blurRadius: 8,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                ),
+                child: AnimatedSwitcher(
+                  duration: _phase == 2
+                      ? const Duration(milliseconds: 1400)
+                      : const Duration(milliseconds: 250),
+                  switchInCurve: Curves.easeInOutCubic,
+                  switchOutCurve: Curves.easeInOutCubic,
+                  child: _coverUrl == null
+                      ? Image.asset(
+                          'assets/images/logo.png',
+                          key: const ValueKey('logo'),
+                          width: double.infinity,
+                          height: double.infinity,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                          errorBuilder: (ctx, e, st) => const Icon(
+                            Icons.videogame_asset_rounded,
+                            color: AppColors.accent,
+                            size: 48,
+                          ),
+                        )
+                      : Container(
+                          key: ValueKey(_coverUrl),
+                          width: double.infinity,
+                          height: double.infinity,
+                          decoration: BoxDecoration(
+                            image: DecorationImage(
+                              image: NetworkImage(_coverUrl!),
+                              fit: BoxFit.cover,
+                            ),
                           ),
                         ),
-                      ),
+                ),
               ),
             ),
-          ),
 
-          // ── CAPA 3: Formulario Flotante ──────────────────────────────────────
-          AnimatedOpacity(
-            opacity: _formOpacity,
-            duration: const Duration(milliseconds: 700),
-            curve: Curves.easeIn,
-            child: SafeArea(
-              child: Center(
-                child: SingleChildScrollView(
-                  physics: const NeverScrollableScrollPhysics(),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1A1A1A).withValues(alpha: 0.85), // Contraste oscuro sólido
-                        borderRadius: BorderRadius.circular(24),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              // Título
-                              AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 280),
-                        child: Text(
-                          _isLogin ? 'Bienvenido de vuelta' : 'Crea tu cuenta',
-                          key: ValueKey(_isLogin),
-                          textAlign: TextAlign.center,
-                          style: GoogleFonts.outfit(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.foreground,
-                          ),
+            // ── CAPA 3: Formulario Flotante ──────────────────────────────────────
+            AnimatedOpacity(
+              opacity: _formOpacity,
+              duration: const Duration(milliseconds: 700),
+              curve: Curves.easeIn,
+              child: SafeArea(
+                child: Center(
+                  child: SingleChildScrollView(
+                    physics: const NeverScrollableScrollPhysics(),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(
+                            0xFF1A1A1A,
+                          ).withValues(alpha: 0.85), // Contraste oscuro sólido
+                          borderRadius: BorderRadius.circular(24),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Tu biblioteca gaming, en tu bolsillo.',
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.outfit(
-                          fontSize: 12,
-                          color: AppColors.mutedForeground,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 32,
                         ),
-                      ),
-                      const SizedBox(height: 22),
-
-                      // ── Campos — expansión suave en registro ──────────────
-                      // AnimatedSize 500ms + easeInOutCubic: el campo "Nombre
-                      // de usuario" se abre sin overflow ni corte brusco.
-                      AnimatedSize(
-                        duration: const Duration(milliseconds: 500),
-                        curve: Curves.easeInOutCubic,
-                        alignment: Alignment.topCenter,
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            if (!_isLogin) ...[
-                              _NeonField(
-                                controller: _userCtrl,
-                                focusNode: _userFocus,
-                                isFocused: _isUserFocused,
-                                hint: 'Nombre de usuario',
-                                icon: Icons.person_outline_rounded,
+                            // Título
+                            AnimatedSwitcher(
+                              duration: const Duration(milliseconds: 280),
+                              child: Text(
+                                _isLogin
+                                    ? 'Bienvenido de vuelta'
+                                    : 'Crea tu cuenta',
+                                key: ValueKey(_isLogin),
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.foreground,
+                                ),
                               ),
-                              const SizedBox(height: 12),
-                            ],
-                            _NeonField(
-                              controller: _emailCtrl,
-                              focusNode: _emailFocus,
-                              isFocused: _isEmailFocused,
-                              hint: 'Correo electrónico',
-                              icon: Icons.alternate_email_rounded,
-                              keyboardType: TextInputType.emailAddress,
                             ),
-                            const SizedBox(height: 12),
-                            _NeonField(
-                              controller: _passCtrl,
-                              focusNode: _passFocus,
-                              isFocused: _isPassFocused,
-                              hint: 'Contraseña',
-                              icon: Icons.lock_outline_rounded,
-                              isPassword: true,
+                            const SizedBox(height: 4),
+                            Text(
+                              'Tu biblioteca gaming, en tu bolsillo.',
+                              textAlign: TextAlign.center,
+                              style: GoogleFonts.outfit(
+                                fontSize: 12,
+                                color: AppColors.mutedForeground,
+                              ),
+                            ),
+                            const SizedBox(height: 22),
+
+                            // ── Campos — expansión suave en registro ──────────────
+                            // AnimatedSize 500ms + easeInOutCubic: el campo "Nombre
+                            // de usuario" se abre sin overflow ni corte brusco.
+                            AnimatedSize(
+                              duration: const Duration(milliseconds: 500),
+                              curve: Curves.easeInOutCubic,
+                              alignment: Alignment.topCenter,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (!_isLogin) ...[
+                                    _NeonField(
+                                      controller: _userCtrl,
+                                      focusNode: _userFocus,
+                                      isFocused: _isUserFocused,
+                                      hint: 'Nombre de usuario',
+                                      icon: Icons.person_outline_rounded,
+                                    ),
+                                    const SizedBox(height: 12),
+                                  ],
+                                  _NeonField(
+                                    controller: _emailCtrl,
+                                    focusNode: _emailFocus,
+                                    isFocused: _isEmailFocused,
+                                    hint: 'Correo electrónico',
+                                    icon: Icons.alternate_email_rounded,
+                                    keyboardType: TextInputType.emailAddress,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  _NeonField(
+                                    controller: _passCtrl,
+                                    focusNode: _passFocus,
+                                    isFocused: _isPassFocused,
+                                    hint: 'Contraseña',
+                                    icon: Icons.lock_outline_rounded,
+                                    isPassword: true,
+                                  ),
+                                ],
+                              ),
+                            ),
+
+                            const SizedBox(height: 20),
+
+                            _SubmitButton(
+                              label: _isLogin
+                                  ? 'Iniciar Sesión'
+                                  : 'Crear Cuenta',
+                              isLoading: _isLoading,
+                              onTap: _submit,
+                            ),
+
+                            const SizedBox(height: 16),
+
+                            GestureDetector(
+                              onTap: _toggleMode,
+                              child: AnimatedSwitcher(
+                                duration: const Duration(milliseconds: 250),
+                                transitionBuilder: (child, anim) =>
+                                    FadeTransition(opacity: anim, child: child),
+                                child: Text(
+                                  _isLogin
+                                      ? '¿No tienes cuenta? Regístrate'
+                                      : '¿Ya tienes cuenta? Inicia sesión',
+                                  key: ValueKey('toggle_$_isLogin'),
+                                  textAlign: TextAlign.center,
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.accent.withValues(
+                                      alpha: 0.85,
+                                    ),
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: AppColors.accent
+                                        .withValues(alpha: 0.45),
+                                  ),
+                                ),
+                              ),
                             ),
                           ],
                         ),
                       ),
-
-                      const SizedBox(height: 20),
-
-                      _SubmitButton(
-                        label: _isLogin ? 'Iniciar Sesión' : 'Crear Cuenta',
-                        isLoading: _isLoading,
-                        onTap: _submit,
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      GestureDetector(
-                        onTap: _toggleMode,
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 250),
-                          transitionBuilder: (child, anim) =>
-                              FadeTransition(opacity: anim, child: child),
-                          child: Text(
-                            _isLogin
-                                ? '¿No tienes cuenta? Regístrate'
-                                : '¿Ya tienes cuenta? Inicia sesión',
-                            key: ValueKey('toggle_$_isLogin'),
-                            textAlign: TextAlign.center,
-                            style: GoogleFonts.outfit(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.accent.withValues(alpha: 0.85),
-                              decoration: TextDecoration.underline,
-                              decorationColor: AppColors.accent.withValues(alpha: 0.45),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-        ),
-      ),
           ],
         ),
       ),
@@ -498,8 +545,9 @@ class _SubmitButton extends StatefulWidget {
     required this.onTap,
     this.isLoading = false,
   });
-  final String   label;
+  final String label;
   final VoidCallback onTap;
+  final bool isLoading;
   final bool isLoading;
   @override
   State<_SubmitButton> createState() => _SubmitButtonState();
@@ -511,9 +559,18 @@ class _SubmitButtonState extends State<_SubmitButton> {
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTapDown: widget.isLoading ? null : (_) => setState(() => _pressed = true),
-      onTapUp: widget.isLoading ? null : (_) { setState(() => _pressed = false); widget.onTap(); },
-      onTapCancel: widget.isLoading ? null : () => setState(() => _pressed = false),
+      onTapDown: widget.isLoading
+          ? null
+          : (_) => setState(() => _pressed = true),
+      onTapUp: widget.isLoading
+          ? null
+          : (_) {
+              setState(() => _pressed = false);
+              widget.onTap();
+            },
+      onTapCancel: widget.isLoading
+          ? null
+          : () => setState(() => _pressed = false),
       child: AnimatedScale(
         scale: _pressed ? 0.97 : 1.0,
         duration: const Duration(milliseconds: 90),
@@ -531,7 +588,9 @@ class _SubmitButtonState extends State<_SubmitButton> {
             borderRadius: BorderRadius.circular(12),
             boxShadow: [
               BoxShadow(
-                color: AppColors.accent.withValues(alpha: _pressed ? 0.10 : 0.36),
+                color: AppColors.accent.withValues(
+                  alpha: _pressed ? 0.10 : 0.36,
+                ),
                 blurRadius: _pressed ? 4 : 18,
                 offset: const Offset(0, 4),
               ),
@@ -540,7 +599,8 @@ class _SubmitButtonState extends State<_SubmitButton> {
           child: Center(
             child: widget.isLoading
                 ? const SizedBox(
-                    width: 20, height: 20,
+                    width: 20,
+                    height: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2.5,
                       color: Colors.black,
@@ -629,10 +689,15 @@ class _NeonFieldState extends State<_NeonField> {
         cursorColor: AppColors.accent,
         decoration: InputDecoration(
           hintText: widget.hint,
-          hintStyle: GoogleFonts.outfit(color: AppColors.mutedForeground, fontSize: 14),
+          hintStyle: GoogleFonts.outfit(
+            color: AppColors.mutedForeground,
+            fontSize: 14,
+          ),
           prefixIcon: Icon(
             widget.icon,
-            color: widget.isFocused ? AppColors.accent : AppColors.mutedForeground,
+            color: widget.isFocused
+                ? AppColors.accent
+                : AppColors.mutedForeground,
             size: 20,
           ),
           suffixIcon: widget.isPassword
