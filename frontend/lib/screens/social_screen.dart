@@ -97,7 +97,7 @@ class _SocialScreenState extends State<SocialScreen> {
                 scrollDirection: Axis.horizontal,
                 physics: const BouncingScrollPhysics(),
                 itemCount: sampleGames.length,
-                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                separatorBuilder: (_, _) => const SizedBox(width: 12),
                 itemBuilder: (context, index) {
                   final game = sampleGames[index];
                   // Asignamos 2 o 3 amigos mockeados al azar a cada juego
@@ -136,7 +136,7 @@ class _SocialScreenState extends State<SocialScreen> {
                   scrollDirection: Axis.horizontal,
                   physics: const BouncingScrollPhysics(),
                   itemCount: highAffinity.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  separatorBuilder: (_, _) => const SizedBox(width: 12),
                   itemBuilder: (context, index) {
                     return SizedBox(
                       width: 280, // Ancho fijo para horizontal
@@ -273,7 +273,7 @@ class _GameCoverCard extends StatelessWidget {
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.3),
+            color: Colors.black.withValues(alpha: 0.3),
             blurRadius: 8,
             offset: const Offset(0, 4),
           )
@@ -306,7 +306,7 @@ class _GameCoverCard extends StatelessWidget {
                               child: Image.network(
                                 friend.avatarUrl!,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => _FallbackInitial(user: friend),
+                                errorBuilder: (_, _, _) => _FallbackInitial(user: friend),
                               ),
                             )
                           : _FallbackInitial(user: friend),
@@ -364,7 +364,7 @@ class _SocialSearchBar extends StatelessWidget {
         color: _bgCard,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: isFocused ? _yellow.withOpacity(0.5) : _border,
+          color: isFocused ? _yellow.withValues(alpha: 0.5) : _border,
           width: isFocused ? 1.5 : 1,
         ),
       ),
@@ -419,10 +419,10 @@ class _OnlineToggleButton extends StatelessWidget {
         height: 42,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
-          color: isActive ? _green.withOpacity(0.15) : _bgCard,
+          color: isActive ? _green.withValues(alpha: 0.15) : _bgCard,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isActive ? _green.withOpacity(0.4) : _border,
+            color: isActive ? _green.withValues(alpha: 0.4) : _border,
             width: isActive ? 1.5 : 1,
           ),
         ),
@@ -437,7 +437,7 @@ class _OnlineToggleButton extends StatelessWidget {
                 color: isActive ? _green : _textMuted,
                 shape: BoxShape.circle,
                 boxShadow: isActive
-                    ? [BoxShadow(color: _green.withOpacity(0.5), blurRadius: 4)]
+                    ? [BoxShadow(color: _green.withValues(alpha: 0.5), blurRadius: 4)]
                     : null,
               ),
             ),

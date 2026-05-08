@@ -12,7 +12,6 @@
 
 import 'dart:async';
 import 'dart:math';
-import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -78,7 +77,7 @@ class _LoginScreenState extends State<LoginScreen>
   
   Timer? _timerPhase2;
   Timer? _timerPhase3;
-  Timer? _timerPhase4;
+
 
   // ── Formulario ─────────────────────────────────────────────────────────────
   double _formOpacity = 0.0;

@@ -9,7 +9,6 @@
 // Toda la navegación a juegos abre GameDetailScreen.
 // =============================================================================
 
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/deal_model.dart';

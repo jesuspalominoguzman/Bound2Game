@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/user_model.dart';
 import '../models/game_model.dart';
-import 'settings_screen.dart';
 
 // ── Constantes de color ───────────────────────────────────────────────────────
 const _bg        = Color(0xFF292929);
@@ -102,7 +101,7 @@ class ProfileScreen extends StatelessWidget {
                   _PlatformCard(
                     platform: 'Xbox Live',
                     nickname: '${targetUser.username}#77',
-                    bgColor: _colorXbox.withOpacity(0.15),
+                    bgColor: _colorXbox.withValues(alpha: 0.15),
                     iconColor: _colorXbox,
                     icon: Icons.gamepad_rounded,
                     isOwnProfile: isOwnProfile,
@@ -111,7 +110,7 @@ class ProfileScreen extends StatelessWidget {
                   _PlatformCard(
                     platform: 'Discord',
                     nickname: '${targetUser.username}#1234',
-                    bgColor: _colorDiscord.withOpacity(0.15),
+                    bgColor: _colorDiscord.withValues(alpha: 0.15),
                     iconColor: _colorDiscord,
                     icon: Icons.discord,
                     isOwnProfile: isOwnProfile,
@@ -340,7 +339,7 @@ class _TopGamesList extends StatelessWidget {
         scrollDirection: Axis.horizontal,
         physics: const BouncingScrollPhysics(),
         itemCount: topGames.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        separatorBuilder: (_, _) => const SizedBox(width: 12),
         itemBuilder: (context, index) {
           final game = topGames[index];
           return Container(
@@ -430,7 +429,7 @@ class _PlatformCard extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: iconColor.withOpacity(0.8),
+                      color: iconColor.withValues(alpha: 0.8),
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -448,7 +447,7 @@ class _PlatformCard extends StatelessWidget {
             Icon(
               isOwnProfile ? Icons.edit_rounded : Icons.copy_rounded,
               size: 18,
-              color: isOwnProfile ? _textSub : iconColor.withOpacity(0.8),
+              color: isOwnProfile ? _textSub : iconColor.withValues(alpha: 0.8),
             ),
           ],
         ),

@@ -685,7 +685,7 @@ class _MessageBubble extends StatelessWidget {
                           ),
                         );
                       },
-                      errorBuilder: (_, __, ___) => Container(
+                      errorBuilder: (_, _, _) => Container(
                         width: 140,
                         height: 80,
                         color: _bgCard,

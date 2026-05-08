@@ -21,6 +21,7 @@
 import 'dart:convert';
 import 'dart:io' show Platform;
 import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'auth_service.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -228,13 +229,18 @@ class ApiService {
   //   Por eso usamos la IP especial 10.0.2.2 que apunta al host de Windows.
   //   iOS Simulator / dispositivo físico: localhost o la IP del PC en red local.
   static String get baseUrl {
+    // 1. Usar variable de entorno si existe (.env) para móviles físicos
+    final envUrl = dotenv.env['API_URL'];
+    if (envUrl != null && envUrl.isNotEmpty) {
+      return envUrl;
+    }
+
+    // 2. Fallback por defecto de Jesús
     try {
       if (Platform.isAndroid) {
         return 'http://10.0.2.2:3000';
       }
-    } catch (_) {
-      // Platform no disponible en web; no se usa
-    }
+    } catch (_) {}
     return 'http://localhost:3000';
   }
 

@@ -375,7 +375,7 @@ class _SearchResultTile extends StatelessWidget {
                 child: Image.network(
                   game.cover,
                   fit: BoxFit.cover,
-                  errorBuilder: (_, __, e) => Container(
+                  errorBuilder: (_, _, e) => Container(
                     color: _kBgCard,
                     child: const Icon(Icons.videogame_asset_rounded, color: _kSub),
                   ),

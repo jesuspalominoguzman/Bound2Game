@@ -26,7 +26,7 @@ class ReputationBadge extends StatelessWidget {
       decoration: BoxDecoration(
         color: cfg.background,
         borderRadius: BorderRadius.circular(99),
-        border: Border.all(color: cfg.color.withOpacity(0.3)),
+        border: Border.all(color: cfg.color.withValues(alpha: 0.3)),
       ),
       child: Text(
         label,

@@ -341,7 +341,7 @@ class _ApiGameCard extends StatelessWidget {
             Image.network(
               game.coverUrl,
               fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
+              errorBuilder: (_, _, _) => Container(
                 color: _kBgCard,
                 child: const Icon(Icons.sports_esports_rounded, color: _kBorder, size: 40),
               ),
@@ -542,7 +542,7 @@ class _UserCard extends StatelessWidget {
                           child: Image.network(
                             user.avatarUrl!,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, e) =>
+                            errorBuilder: (_, _, e) =>
                                 _InitialsAvatar(initials: user.initials),
                           ),
                         )

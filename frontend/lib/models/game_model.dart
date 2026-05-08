@@ -287,31 +287,31 @@ class ReputationConfig {
       case Reputation.legendary:
         return ReputationConfig(
           color: const Color(0xFFFFD700),
-          background: const Color(0xFFFFD700).withOpacity(0.15),
+          background: const Color(0xFFFFD700).withValues(alpha: 0.15),
           label: 'Leyenda',
         );
       case Reputation.exemplar:
         return ReputationConfig(
           color: const Color(0xFF4AF626),
-          background: const Color(0xFF4AF626).withOpacity(0.15),
+          background: const Color(0xFF4AF626).withValues(alpha: 0.15),
           label: 'Ejemplar',
         );
       case Reputation.positive:
         return ReputationConfig(
           color: const Color(0xFF00E5FF),
-          background: const Color(0xFF00E5FF).withOpacity(0.15),
+          background: const Color(0xFF00E5FF).withValues(alpha: 0.15),
           label: 'Positivo',
         );
       case Reputation.neutral:
         return ReputationConfig(
           color: const Color(0xFF888888),
-          background: const Color(0xFF888888).withOpacity(0.15),
+          background: const Color(0xFF888888).withValues(alpha: 0.15),
           label: 'Neutral',
         );
       case Reputation.negative:
         return ReputationConfig(
           color: const Color(0xFFFF4040),
-          background: const Color(0xFFFF4040).withOpacity(0.15),
+          background: const Color(0xFFFF4040).withValues(alpha: 0.15),
           label: 'Negativo',
         );
     }
@@ -338,21 +338,21 @@ class PcReqConfig {
       case PcReq.green:
         return PcReqConfig(
           color: const Color(0xFF4AF626),
-          background: const Color(0xFF4AF626).withOpacity(0.15),
+          background: const Color(0xFF4AF626).withValues(alpha: 0.15),
           label: '¡Listo para Jugar!',
           icon: '✓',
         );
       case PcReq.yellow:
         return PcReqConfig(
           color: const Color(0xFFFFB800),
-          background: const Color(0xFFFFB800).withOpacity(0.15),
+          background: const Color(0xFFFFB800).withValues(alpha: 0.15),
           label: 'Puede requerir ajustes',
           icon: '⚡',
         );
       case PcReq.red:
         return PcReqConfig(
           color: const Color(0xFFFF4040),
-          background: const Color(0xFFFF4040).withOpacity(0.15),
+          background: const Color(0xFFFF4040).withValues(alpha: 0.15),
           label: 'No compatible',
           icon: '✗',
         );

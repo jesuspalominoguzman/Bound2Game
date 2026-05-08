@@ -86,7 +86,7 @@ class _UserCardState extends State<UserCard> {
           color: _isPressed ? const Color(0xFF222222) : _bgCard,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: _isPressed ? _yellow.withOpacity(0.3) : _border,
+            color: _isPressed ? _yellow.withValues(alpha: 0.3) : _border,
           ),
         ),
         child: Row(
@@ -158,7 +158,7 @@ class _UserCardState extends State<UserCard> {
                       : _yellow, // Usar amarillo como acento para acciones completadas
               style: IconButton.styleFrom(
                 backgroundColor: _state == _FriendState.friends 
-                    ? _yellow.withOpacity(0.1) 
+                    ? _yellow.withValues(alpha: 0.1) 
                     : const Color(0xFF292929),
               ),
             ),

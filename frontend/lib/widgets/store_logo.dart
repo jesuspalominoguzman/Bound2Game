@@ -102,7 +102,7 @@ class StoreLogoWidget extends StatelessWidget {
       fit: BoxFit.contain,
       color: finalColor,
       colorBlendMode: finalColor != null ? BlendMode.srcIn : null,
-      errorBuilder: (_, __, ___) =>
+      errorBuilder: (_, _, _) =>
           Icon(cfg.icon, color: cfg.color, size: size),
     );
   }
