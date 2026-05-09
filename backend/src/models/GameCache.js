@@ -14,13 +14,21 @@ const gameCacheSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    // Precio y tienda
+    currentPrice:    { type: String, default: null },
+    retailPrice:     { type: String, default: null },
+    cheapestStore:   { type: String, default: null },
+    lowestPriceEver: { type: String, default: null },
+    // Requisitos
     requirements: {
-        min_ram: { type: Number, default: null }, // en GB
-        min_gpu: { type: String, default: null },
-        recommended_ram: { type: Number, default: null } // en GB
+        min_ram:         { type: Number, default: null },
+        min_gpu:         { type: String, default: null },
+        recommended_ram: { type: Number, default: null }
     },
+    pcRequirements: { type: String, default: null },
+    // HowLongToBeat
     hltb: {
-        mainStory: { type: Number, default: null },
+        mainStory:     { type: Number, default: null },
         completionist: { type: Number, default: null }
     },
     lastPriceUpdate: {
@@ -32,3 +40,4 @@ const gameCacheSchema = new mongoose.Schema({
 });
 
 module.exports = mongoose.model('GameCache', gameCacheSchema);
+

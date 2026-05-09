@@ -15,14 +15,14 @@ import 'package:flutter/services.dart';
 import 'package:giphy_get/giphy_get.dart';
 import '../models/user_model.dart';
 import '../services/socket_service.dart';
+import '../services/auth_service.dart';
 
 // TODO: Mueve esta clave a una variable de entorno o a flutter_dotenv.
 // Obtén tu API Key gratuita en https://developers.giphy.com/
 const _kGiphyApiKey = 'BSgmdKZuDX7iOouqo0eDnQl0340CRxc8';
 
-// ID de usuario autenticado actualmente (reemplazar por AuthService real).
-// Formato: MongoDB ObjectId del usuario en sesión.
-const _kCurrentUserId = 'CURRENT_USER_OBJECT_ID';
+// El ID real lo obtendremos del AuthService en el initState
+
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
 const _bg = Color(0xFF0D0D0D);
@@ -62,39 +62,6 @@ enum MessageType { text, emoji, gif }
 
 // ── Datos de ejemplo (mensajes de bienvenida simulados) ──────────────────────
 
-List<ChatMessage> _mockMessages(String username) => [
-  ChatMessage(
-    id: 'm1',
-    text: '¡Hola! ¿Jugamos algo esta noche?',
-    isMe: false,
-    timestamp: DateTime.now().subtract(const Duration(minutes: 14)),
-  ),
-  ChatMessage(
-    id: 'm2',
-    text: '¡Claro! Estaba pensando en Elden Ring co-op.',
-    isMe: true,
-    timestamp: DateTime.now().subtract(const Duration(minutes: 12)),
-  ),
-  ChatMessage(
-    id: 'm3',
-    text: '¿Tienes pase de temporada? Hay DLC nuevo 🔥',
-    isMe: false,
-    timestamp: DateTime.now().subtract(const Duration(minutes: 10)),
-  ),
-  ChatMessage(
-    id: 'm4',
-    text: 'Sí, lo compré ayer en oferta en Steam. ¡-60%!',
-    isMe: true,
-    timestamp: DateTime.now().subtract(const Duration(minutes: 8)),
-  ),
-  ChatMessage(
-    id: 'm5',
-    text: '¡Genial! Te mando invitación a las 22:00 👾',
-    isMe: false,
-    timestamp: DateTime.now().subtract(const Duration(minutes: 2)),
-  ),
-];
-
 // =============================================================================
 // ChatScreen
 // =============================================================================
@@ -127,33 +94,41 @@ class _ChatScreenState extends State<ChatScreen> {
   late final String _roomId;
 
   late final List<ChatMessage> _messages;
+  String? _currentUserId;
 
   @override
   void initState() {
     super.initState();
-    _messages = _mockMessages(widget.user.username);
+    _messages = [];
 
-    // Calcular roomId único y estable para esta pareja de usuarios
-    _roomId = widget.roomId ?? _buildRoomId(_kCurrentUserId, widget.user.id);
-
-    // Conectar al WebSocket y unirse a la sala
-    _socketService.connect(_roomId);
-
-    // Escuchar historial inicial (llega al hacer joinRoom)
-    _socketService.onChatHistory((data) {
+    // Obtener ID del usuario actual de forma asíncrona
+    AuthService.getCurrentUser().then((user) {
       if (!mounted) return;
-      final list = (data as List).map((m) => _fromSocketData(m)).toList();
       setState(() {
-        _messages
-          ..clear()
-          ..addAll(list.reversed); // reversed porque ListView es reverse:true
+        _currentUserId = user?.id ?? 'UNKNOWN';
+        // Calcular roomId único y estable para esta pareja de usuarios
+        _roomId = widget.roomId ?? _buildRoomId(_currentUserId!, widget.user.id);
       });
-    });
 
-    // Escuchar nuevos mensajes en tiempo real
-    _socketService.onNewMessage((data) {
-      if (!mounted) return;
-      setState(() => _messages.insert(0, _fromSocketData(data)));
+      // Conectar al WebSocket y unirse a la sala
+      _socketService.connect(_roomId);
+
+      // Escuchar historial inicial (llega al hacer joinRoom)
+      _socketService.onChatHistory((data) {
+        if (!mounted) return;
+        final list = (data as List).map((m) => _fromSocketData(m)).toList();
+        setState(() {
+          _messages
+            ..clear()
+            ..addAll(list.reversed); // reversed porque ListView es reverse:true
+        });
+      });
+
+      // Escuchar nuevos mensajes en tiempo real
+      _socketService.onNewMessage((data) {
+        if (!mounted) return;
+        setState(() => _messages.insert(0, _fromSocketData(data)));
+      });
     });
 
     _focusNode.addListener(() {
@@ -174,7 +149,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// Convierte el payload JSON del socket en un [ChatMessage] local.
   ChatMessage _fromSocketData(dynamic data) {
-    final isMe = data['senderId'].toString() == _kCurrentUserId;
+    final isMe = data['senderId'].toString() == _currentUserId;
     final type = data['messageType'] == 'gif'
         ? MessageType.gif
         : MessageType.text;
@@ -211,25 +186,14 @@ class _ChatScreenState extends State<ChatScreen> {
     // Enviar al servidor via WebSocket (persiste en Mongo con TTL 24h)
     _socketService.sendMessage(
       roomId: _roomId,
-      userId: _kCurrentUserId,
+      userId: _currentUserId!,
       content: text,
       type: 'text',
     );
 
-    // Añadir localmente de forma optimista para UX inmediata
-    setState(() {
-      _messages.insert(
-        0,
-        ChatMessage(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          text: text,
-          isMe: true,
-          timestamp: DateTime.now(),
-        ),
-      );
-      _textCtrl.clear();
-      _showEmojiPicker = false;
-    });
+    // Limpiamos el texto, el mensaje aparecerá cuando el servidor lo rebote por onNewMessage
+    _textCtrl.clear();
+    _showEmojiPicker = false;
   }
 
   // ── GIF via Giphy ─────────────────────────────────────────────────────────
@@ -260,40 +224,21 @@ class _ChatScreenState extends State<ChatScreen> {
     // Enviar al servidor via WebSocket
     _socketService.sendMessage(
       roomId: _roomId,
-      userId: _kCurrentUserId,
+      userId: _currentUserId!,
       content: gifUrl,
       type: 'gif',
     );
-
-    // Añadir localmente de forma optimista
-    setState(() {
-      _messages.insert(
-        0,
-        ChatMessage(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          text: gifUrl,
-          isMe: true,
-          timestamp: DateTime.now(),
-          type: MessageType.gif,
-        ),
-      );
-    });
   }
 
   void _sendEmoji(String emoji) {
     HapticFeedback.selectionClick();
-    setState(() {
-      _messages.insert(
-        0,
-        ChatMessage(
-          id: DateTime.now().millisecondsSinceEpoch.toString(),
-          text: emoji,
-          isMe: true,
-          timestamp: DateTime.now(),
-          type: MessageType.emoji,
-        ),
-      );
-    });
+    // Enviar al servidor via WebSocket
+    _socketService.sendMessage(
+      roomId: _roomId,
+      userId: _currentUserId!,
+      content: emoji,
+      type: 'text', // Los emojis se mandan como texto normal
+    );
   }
 
   void _toggleEmojiPicker() {
@@ -326,6 +271,15 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_currentUserId == null) {
+      return const Scaffold(
+        backgroundColor: _bg,
+        body: Center(
+          child: CircularProgressIndicator(color: _cyan),
+        ),
+      );
+    }
+
     return Scaffold(
       backgroundColor: _bg,
       resizeToAvoidBottomInset: true,

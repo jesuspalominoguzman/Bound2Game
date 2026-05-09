@@ -75,8 +75,12 @@ class GameDetailScreen extends StatefulWidget {
 
 class _GameDetailScreenState extends State<GameDetailScreen> {
   bool _isLoading = false;
-  // String? _error;
+  bool _isTogglingLibrary = false;
+  bool _addedToLibraryLocal = false;
+  bool _removedFromLibraryLocal = false;
+  String? _addedEntryId; // entryId devuelto por el servidor al añadir
   Game? _fullGame;
+  List<GameDeal> _deals = [];
 
   @override
   void initState() {
@@ -85,15 +89,48 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
   }
 
   Future<void> _loadDetails() async {
-    if (widget.entryId == null) {
-      setState(() => _fullGame = widget.baseGame);
-      return;
-    }
-
-    setState(() { _isLoading = true; /* _error = null; */ });
+    setState(() { _isLoading = true; });
     try {
       final user = await AuthService.getCurrentUser();
       if (user == null) throw Exception('No session');
+
+      // 1. Fetch Deals
+      final allDeals = await ApiService.fetchDeals(limit: 60);
+      final titleLower = widget.baseGame.title.toLowerCase();
+      final filteredDeals = allDeals.where((d) => 
+        d.title.toLowerCase().contains(titleLower) || titleLower.contains(d.title.toLowerCase())
+      ).toList();
+
+      _deals = filteredDeals.map((d) {
+        DealStore store = DealStore.steam;
+        final sName = d.storeName.toLowerCase();
+        if (sName.contains('epic')) { store = DealStore.epic; }
+        else if (sName.contains('playstation') || sName.contains('ps')) { store = DealStore.psStore; }
+        else if (sName.contains('xbox')) { store = DealStore.xbox; }
+        else if (sName.contains('nintendo')) { store = DealStore.nintendo; }
+        else if (sName.contains('instant')) { store = DealStore.instantGaming; }
+
+        return GameDeal(
+          gameId: widget.baseGame.id.toString(),
+          gameTitle: d.title,
+          store: store,
+          originalPrice: d.normalPrice,
+          salePrice: d.salePrice,
+          discountPercent: d.normalPrice > 0 ? ((d.normalPrice - d.salePrice) / d.normalPrice * 100).round() : 0,
+          isFree: d.salePrice == 0,
+        );
+      }).toList();
+
+      // 2. Fetch Game Details from Library if entryId exists
+      if (widget.entryId == null) {
+        if (mounted) {
+          setState(() {
+            _fullGame = widget.baseGame;
+            _isLoading = false;
+          });
+        }
+        return;
+      }
 
       final details = await ApiService.getGameDetails(
         userId: user.id,
@@ -140,11 +177,71 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
   }
 
   /// ¿El usuario tiene este juego en su biblioteca?
-  bool get _isOwned => _fullGame != null && _fullGame!.playtime > 0;
+  bool get _isOwned {
+    if (_removedFromLibraryLocal) return false;
+    if (_addedToLibraryLocal) return true;
+    return _fullGame != null && _fullGame!.playtime > 0;
+  }
 
   /// Estado del corazón (Lista de Deseados).
   /// Se desmarca automáticamente si _isOwned pasa a true.
   bool _isInWishlist = false;
+
+  /// Añadir / Quitar de la biblioteca
+  Future<void> _toggleLibrary() async {
+    setState(() => _isTogglingLibrary = true);
+    try {
+      final user = await AuthService.getCurrentUser();
+      if (user == null) throw Exception('No session');
+
+      if (_isOwned) {
+        // Quitar
+        // Si no tenemos entryId real (ej. añadido localmente en esta misma sesión),
+        // intentar borrar por ID podría fallar si la API no soporta DELETE por gameId.
+        // Pero en MVP lo intentamos, o usamos el entryId si existe.
+        final targetId = _addedEntryId ?? widget.entryId ?? widget.baseGame.id.toString();
+        await ApiService.removeFromLibrary(userId: user.id, entryId: targetId);
+        if (mounted) {
+          setState(() {
+            _removedFromLibraryLocal = true;
+            _addedToLibraryLocal = false;
+          });
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('Juego eliminado de la biblioteca', style: TextStyle(color: Colors.white, fontSize: 13)),
+            backgroundColor: _bgCard,
+          ));
+        }
+      } else {
+        // Añadir
+        final newEntryId = await ApiService.addToLibrary(
+          userId: user.id,
+          gameTitle: widget.baseGame.title,
+          platform: 'PC', // por defecto
+        );
+        if (mounted) {
+          setState(() {
+            _addedToLibraryLocal = true;
+            _addedEntryId = newEntryId; // guardamos el id real para poder borrarlo
+            _removedFromLibraryLocal = false;
+            _isInWishlist = false; // Desmarcar de deseados si se añade a la biblioteca
+          });
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+            content: Text('¡Juego añadido a la biblioteca!', style: TextStyle(color: _green, fontSize: 13)),
+            backgroundColor: _bgCard,
+          ));
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e', style: const TextStyle(color: _red, fontSize: 13)),
+          backgroundColor: _bgCard,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _isTogglingLibrary = false);
+    }
+  }
 
   /// Intenta añadir/quitar el juego de la Lista de Deseados.
   /// Si el juego ya está en la biblioteca, muestra un snackbar informativo.
@@ -212,6 +309,26 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Botón Agregar/Quitar de Biblioteca
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      icon: _isTogglingLibrary
+                        ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : Icon(_isOwned ? Icons.library_add_check_rounded : Icons.add_circle_outline_rounded),
+                      label: Text(_isOwned ? 'En Biblioteca (Click para quitar)' : 'Añadir a Biblioteca', style: const TextStyle(fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _isOwned ? _green.withValues(alpha: 0.15) : _yellow,
+                        foregroundColor: _isOwned ? _green : Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: _isOwned ? _green.withValues(alpha: 0.5) : Colors.transparent)),
+                        elevation: 0,
+                      ),
+                      onPressed: _isTogglingLibrary ? null : _toggleLibrary,
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+
                   // Módulo ROI
                   _RoiModule(game: game),
                   const SizedBox(height: 16),
@@ -235,7 +352,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
                   ],
 
                   // Módulo Comparador de Precios
-                  _PriceCompareModule(game: game),
+                  _PriceCompareModule(game: game, deals: _deals),
                   const SizedBox(height: 16),
 
                   // Info general
@@ -850,21 +967,14 @@ class _InfoChip extends StatelessWidget {
 // =============================================================================
 
 /// Módulo que muestra todas las tiendas donde el juego tiene oferta,
-/// cruzando los datos via game.id con sampleDeals.
-/// TODO(backend): Sustituir sampleDeals por DealsService.fetchDealsForGame(id)
+/// recibiendo los deals reales obtenidos por la API.
 class _PriceCompareModule extends StatelessWidget {
-  const _PriceCompareModule({required this.game});
+  const _PriceCompareModule({required this.game, required this.deals});
   final Game game;
+  final List<GameDeal> deals;
 
   @override
   Widget build(BuildContext context) {
-    // Cruzar por ID (el campo gameId en GameDeal corresponde a Game.id.toString())
-    final List<GameDeal> sampleDeals = []; // TODO: Fetch from ApiService
-    final deals = sampleDeals
-        .where((d) => d.gameId == game.id.toString())
-        .toList()
-      ..sort((a, b) => a.salePrice.compareTo(b.salePrice));
-
     if (deals.isEmpty) {
       return _ModuleCard(
         icon: Icons.compare_arrows_rounded,

@@ -1,13 +1,9 @@
-// =============================================================================
-// search_delegate.dart — Bound2Game Flutter
-//
-// Búsqueda global a pantalla completa.
-// Paleta: fondo #292929, acento #FFB800, textos blanco/gris claro.
-// =============================================================================
+import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/game_model.dart';
+import '../services/api_service.dart';
 import 'game_detail_screen.dart';
 
 // ── Paleta ────────────────────────────────────────────────────────────────────
@@ -73,48 +69,124 @@ class B2GSearchDelegate extends SearchDelegate<String> {
 
   @override
   Widget buildResults(BuildContext context) {
-    return _buildSuggestionsOrResults(context);
+    return _SearchResultsBody(query: query);
   }
 
   @override
   Widget buildSuggestions(BuildContext context) {
-    return _buildSuggestionsOrResults(context);
+    if (query.trim().isEmpty) return const _SearchEmptyState();
+    return _SearchResultsBody(query: query);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Widget que gestiona el debounce y la llamada real a la API
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SearchResultsBody extends StatefulWidget {
+  const _SearchResultsBody({required this.query});
+  final String query;
+
+  @override
+  State<_SearchResultsBody> createState() => _SearchResultsBodyState();
+}
+
+class _SearchResultsBodyState extends State<_SearchResultsBody> {
+  Timer? _debounce;
+  String _activeQuery = '';
+  bool _isLoading = false;
+  Game? _result;
+  bool _notFound = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleSearch(widget.query);
   }
 
-  Widget _buildSuggestionsOrResults(BuildContext context) {
-    if (query.isEmpty) {
-      return const _SearchEmptyState();
+  @override
+  void didUpdateWidget(_SearchResultsBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.query != widget.query) {
+      _scheduleSearch(widget.query);
     }
+  }
 
-    final lowerQuery = query.toLowerCase();
-    final results = sampleGames
-        .where((g) =>
-            g.title.toLowerCase().contains(lowerQuery) ||
-            g.genre.toLowerCase().contains(lowerQuery))
-        .toList();
+  void _scheduleSearch(String q) {
+    _debounce?.cancel();
+    if (q.trim().isEmpty) return;
+    setState(() { _isLoading = true; _notFound = false; });
+    _debounce = Timer(const Duration(milliseconds: 600), () => _doSearch(q.trim()));
+  }
 
-    if (results.isEmpty) {
-      return _SearchNoResults(query: query);
-    }
-
-    return ListView.builder(
-      physics: const BouncingScrollPhysics(),
-      itemCount: results.length,
-      itemBuilder: (context, index) {
-        final game = results[index];
-        return _SearchResultTile(
-          game: game,
-          onTap: () {
-            close(context, game.title);
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => GameDetailScreen(baseGame: game)),
-            );
-          },
+  Future<void> _doSearch(String q) async {
+    if (!mounted) return;
+    setState(() { _activeQuery = q; _isLoading = true; _notFound = false; _result = null; });
+    try {
+      final api = await ApiService.searchGame(q);
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _result = Game(
+          id:           api.title.hashCode,
+          title:        api.title,
+          platform:     Platform.steam,
+          genre:        'Acción',
+          playtime:     0,
+          status:       GameStatus.unplayed,
+          cover:        api.coverUrl,
+          pcReq:        PcReq.yellow,
+          hasCosmetics: false,
+          price:        double.tryParse(api.currentPrice ?? '0') ?? 0,
+          year:         api.addedAt?.year ?? DateTime.now().year,
+          rentability:  api.rentability,
+          hltb: HltbTimes(
+            main:          api.hltbMainStory?.round(),
+            completionist: api.hltbCompletionist?.round(),
+          ),
         );
-      },
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() { _isLoading = false; _notFound = true; });
+    }
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return Container(
+        color: _kBg,
+        child: const Center(child: CircularProgressIndicator(color: _kYellow, strokeWidth: 2)),
+      );
+    }
+    if (_notFound || _result == null) {
+      return _SearchNoResults(query: _activeQuery);
+    }
+    final game = _result!;
+    return Container(
+      color: _kBg,
+      child: ListView(
+        physics: const BouncingScrollPhysics(),
+        children: [
+          _SearchResultTile(
+            game: game,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => GameDetailScreen(baseGame: game)),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EMPTY STATE — Pantalla premium cuando query está vacío

@@ -411,7 +411,7 @@ class ApiService {
   }
 
   /// POST /api/users/:userId/library — añadir juego
-  static Future<void> addToLibrary({
+  static Future<String?> addToLibrary({
     required String userId,
     required String gameTitle,
     String platform = 'Steam',
@@ -429,7 +429,9 @@ class ApiService {
         )
         .timeout(_timeout);
 
-    _parse(r);
+    final data = _parse(r);
+    // El backend devuelve { entry: { _id: '...', ... } }
+    return data['entry']?['_id']?.toString();
   }
 
   /// PATCH /api/users/:userId/library/:entryId — actualizar estado o nota

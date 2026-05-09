@@ -2,9 +2,74 @@ const gameService = require('../services/gameService');
 const GameCache = require('../models/GameCache');
 const axios = require('axios');
 
+// ──────────────────────────────────────────────────────────────────────────────
+// Fallback 1: Steam Store Search (sin rate limit, solo juegos de PC/Steam)
+// ──────────────────────────────────────────────────────────────────────────────
+const searchSteamFallback = async (title) => {
+    try {
+        const url = `https://store.steampowered.com/api/storesearch/?term=${encodeURIComponent(title)}&l=english&cc=US`;
+        const resp = await axios.get(url, { timeout: 8000 });
+        const items = resp.data?.items;
+        if (!items || items.length === 0) return null;
+
+        const exact = items.find(i => i.name.toLowerCase() === title.toLowerCase());
+        const best = exact || items[0];
+
+        return {
+            title: best.name,
+            steamAppID: best.id?.toString(),
+            retailPrice: best.price?.final ? (best.price.final / 100).toFixed(2) : '0',
+            currentPrice: best.price?.final ? (best.price.final / 100).toFixed(2) : '0',
+            cheapestStore: 'Steam',
+            lowestPriceEver: '0',
+            imageUrl: best.tiny_image || `https://cdn.akamai.steamstatic.com/steam/apps/${best.id}/header.jpg`,
+        };
+    } catch (e) {
+        console.error('Steam fallback failed:', e.message);
+        return null;
+    }
+};
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Fallback 2: OpenCritic — cubre TODAS las plataformas (Nintendo, PS, Xbox…)
+// No requiere API key. Devuelve título + portada.
+// ──────────────────────────────────────────────────────────────────────────────
+const searchOpenCriticFallback = async (title) => {
+    try {
+        const url = `https://api.opencritic.com/api/game/search?criteria=${encodeURIComponent(title)}`;
+        const resp = await axios.get(url, {
+            timeout: 8000,
+            headers: { 'User-Agent': 'Bound2Game/1.0 (game tracker app)' }
+        });
+        if (!Array.isArray(resp.data) || resp.data.length === 0) return null;
+
+        const exact = resp.data.find(g => g.name.toLowerCase() === title.toLowerCase());
+        const best = exact || resp.data[0];
+
+        const imgBase = 'https://img.opencritic.com/';
+        let imageUrl = '';
+        if (best.images?.box?.sm) imageUrl = imgBase + best.images.box.sm;
+        else if (best.images?.box?.og) imageUrl = imgBase + best.images.box.og;
+
+        return {
+            title: best.name,
+            steamAppID: null,
+            imageUrl,
+            currentPrice: '0',
+            retailPrice: '0',
+            cheapestStore: 'N/A',
+            lowestPriceEver: '0',
+        };
+    } catch (e) {
+        console.error('OpenCritic fallback failed:', e.message);
+        return null;
+    }
+};
+
 /**
  * Orquesta la búsqueda de información de un juego en múltiples APIs
  * y devuelve un JSON unificado, utilizando MongoDB como caché.
+ * Cadena: MongoDB caché → CheapShark → Steam → OpenCritic
  */
 const searchGame = async (req, res) => {
     try {
@@ -15,7 +80,7 @@ const searchGame = async (req, res) => {
         }
 
         // --- 1. BUSCAR EN CACHÉ (MONGODB) ---
-        const cachedGame = await GameCache.findOne({ title: { $regex: new RegExp(`^${title}$`, "i") } });
+        const cachedGame = await GameCache.findOne({ title: { $regex: new RegExp(title, 'i') } });
 
         if (cachedGame) {
             console.log(`⚡ Devolviendo '${cachedGame.title}' desde la caché de MongoDB`);
@@ -24,11 +89,38 @@ const searchGame = async (req, res) => {
 
         console.log(`🌐 Buscando '${title}' en APIs externas...`);
 
-        // --- 2. SI NO EXISTE EN CACHÉ, BUSCAR EN APIS EXTERNAS ---
-        const gameData = await gameService.getCheapSharkData(title);
+        // --- 2. CADENA DE BÚSQUEDA: CheapShark → Steam → OpenCritic ---
+        let gameData = await gameService.getCheapSharkData(title);
 
         if (!gameData) {
-            return res.status(404).json({ error: 'Juego no encontrado en la base de datos de precios.' });
+            console.log(`⚠️  CheapShark falló para '${title}', probando Steam...`);
+            gameData = await searchSteamFallback(title);
+        }
+
+        if (!gameData) {
+            console.log(`⚠️  Steam también falló, probando OpenCritic (multi-plataforma)...`);
+            gameData = await searchOpenCriticFallback(title);
+        }
+
+        // Fallback 3: usar HLTB para validar que el juego existe, con datos mínimos
+        if (!gameData) {
+            console.log(`⚠️ falló, intentando HLTB como último recurso...`);
+            const hltbOnly = await gameService.getHowLongToBeatData(title);
+            if (hltbOnly && typeof hltbOnly.main === 'number') {
+                gameData = {
+                    title,
+                    steamAppID: null,
+                    imageUrl: '',
+                    currentPrice: '0',
+                    retailPrice: '0',
+                    cheapestStore: 'N/A',
+                    lowestPriceEver: '0',
+                };
+            }
+        }
+
+        if (!gameData) {
+            return res.status(404).json({ error: 'Juego no encontrado.' });
         }
 
         let pcRequirements = null;
@@ -42,6 +134,9 @@ const searchGame = async (req, res) => {
         const newGameData = {
             title: gameData.title,
             steamAppID: gameData.steamAppID || null,
+            imageUrl: gameData.imageUrl || (gameData.steamAppID
+                ? `https://cdn.akamai.steamstatic.com/steam/apps/${gameData.steamAppID}/header.jpg`
+                : ''),
             retailPrice: gameData.retailPrice,
             currentPrice: gameData.currentPrice,
             cheapestStore: gameData.cheapestStore,
@@ -50,7 +145,7 @@ const searchGame = async (req, res) => {
                 mainStory: playtimeData.main,
                 completionist: playtimeData.completionist
             },
-            pcRequirements: pcRequirements || "No disponibles",
+            pcRequirements: pcRequirements || 'No disponibles',
             lastPriceUpdate: new Date()
         };
 
@@ -58,7 +153,7 @@ const searchGame = async (req, res) => {
         const newGame = new GameCache(newGameData);
         await newGame.save();
 
-        console.log(`💾 Juego '${newGame.title}' guardado en la caché de MongoDB`);
+        console.log(`✅ Juego '${newGame.title}' guardado en la caché de MongoDB`);
         return res.json(newGame);
 
     } catch (error) {
@@ -70,4 +165,3 @@ const searchGame = async (req, res) => {
 module.exports = {
     searchGame
 };
-

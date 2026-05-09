@@ -11,11 +11,11 @@ const userLibrarySchema = new mongoose.Schema({
         ref: 'GameCache'
     },
     gameDetails: {
-        id: { type: String },
-        name: { type: String, required: true },
-        image: { type: String },
-        mainTime: { type: Number },
-        price: { type: Number },
+        id:          { type: String },
+        name:        { type: String },   // ya no requerido: usamos gameId→GameCache
+        image:       { type: String },
+        mainTime:    { type: Number },
+        price:       { type: Number },
         rentability: { type: Number }
     },
     platform: {

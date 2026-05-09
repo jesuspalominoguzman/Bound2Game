@@ -11,6 +11,7 @@
 // =============================================================================
 
 import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'api_service.dart';
 
 class SocketService {
   // ── Singleton ───────────────────────────────────────────────────────────────
@@ -38,7 +39,7 @@ class SocketService {
     }
 
     _socket = IO.io(
-      'http://10.0.2.2:3000/chat', // Namespace /chat del backend
+      '${ApiService.baseUrl}/chat', // Namespace /chat del backend dinámico
       IO.OptionBuilder()
           .setTransports(['websocket'])       // Fuerza WebSocket puro (sin polling)
           .disableAutoConnect()               // Controlamos la conexión manualmente

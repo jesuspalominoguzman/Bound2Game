@@ -8,6 +8,7 @@ import '../models/deal_model.dart';
 import '../services/deals_prefs_service.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
+import 'login_screen.dart';
 
 const _bg      = Color(0xFF101010);
 const _bgCard  = Color(0xFF181818);
@@ -130,6 +131,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 8),
                   _GeneralCard(),
+
+                  const SizedBox(height: 32),
+
+                  // Botón de Cerrar Sesión
+                  SizedBox(
+                    width: double.infinity,
+                    height: 42,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _red, // Usamos rojo para acción destructiva pero con misma forma
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        elevation: 0,
+                      ),
+                      onPressed: () async {
+                        await AuthService.clearSession();
+                        if (context.mounted) {
+                          Navigator.pushAndRemoveUntil(
+                            context,
+                            MaterialPageRoute(builder: (_) => const LoginScreen()),
+                            (route) => false,
+                          );
+                        }
+                      },
+                      child: const Text('Cerrar Sesión', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+                    ),
+                  ),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),

@@ -29,35 +29,49 @@ const getUserLibrary = async (req, res) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const addGameToLibrary = async (req, res) => {
     try {
-        const { userId }   = req.params;
-        const { gameName, platform = 'Steam', status = 'Backlog' } = req.body;
+        const { userId } = req.params;
+        const { gameName: rawGameName, gameTitle, platform = 'PC', status = 'Backlog' } = req.body;
+        const gameName = rawGameName || gameTitle;
 
         if (!gameName) {
             return res.status(400).json({ error: 'gameName es obligatorio' });
         }
 
-        // 1. Buscar el juego por API
-        const gameData = await gameService.searchGame(gameName);
-        if (!gameData) {
-            return res.status(404).json({ error: 'Juego no encontrado' });
-        }
+        // 1. Buscar primero en la caché de MongoDB (evita rate limits de APIs externas)
+        let gameCache = await GameCache.findOne({ title: { $regex: new RegExp(gameName, 'i') } });
 
-        // 2. Guardar o actualizar en GameCache
-        let gameCache = await GameCache.findOne({ title: { $regex: new RegExp(`^${gameData.name}$`, 'i') } });
+        // 2. Si no está en caché, buscar en APIs externas y guardar
         if (!gameCache) {
+            console.log(`📡 Buscando '${gameName}' en APIs externas para añadir a biblioteca...`);
+            const gameData = await gameService.searchGame(gameName);
+
+            if (!gameData) {
+                return res.status(404).json({ error: 'Juego no encontrado. Prueba con el nombre exacto en inglés.' });
+            }
+
+            const steamId = gameData.steamAppID || gameData.id || null;
+            const imageUrl = gameData.imageUrl || gameData.image ||
+                (steamId ? `https://cdn.akamai.steamstatic.com/steam/apps/${steamId}/header.jpg` : '');
+
             gameCache = new GameCache({
-                title: gameData.name,
-                steamAppID: gameData.id,
-                imageUrl: gameData.image,
-                requirements: gameData.requirements,
-                hltb: { mainStory: gameData.mainTime },
+                title:        gameData.title || gameData.name,
+                steamAppID:   steamId,
+                imageUrl,
+                currentPrice:    gameData.currentPrice || gameData.price || '0',
+                retailPrice:     gameData.retailPrice || '0',
+                cheapestStore:   gameData.cheapestStore || 'N/A',
+                lowestPriceEver: gameData.lowestPriceEver || '0',
+                hltb: {
+                    mainStory:     gameData.mainTime || null,
+                    completionist: null
+                },
                 lastPriceUpdate: Date.now()
             });
             await gameCache.save();
         }
 
         // 3. Comprobar si ya existe en la biblioteca
-        const existing = await UserLibrary.findOne({ userId, 'gameDetails.name': gameData.name });
+        const existing = await UserLibrary.findOne({ userId, gameId: gameCache._id });
         if (existing) {
             return res.status(409).json({ error: 'El juego ya está en tu biblioteca' });
         }
@@ -65,14 +79,15 @@ const addGameToLibrary = async (req, res) => {
         // 4. Añadir a la biblioteca del usuario
         const entry = new UserLibrary({
             userId,
-            gameId: gameCache._id,
+            gameId:   gameCache._id,
+            // Rellenamos gameDetails para retrocompatibilidad con código antiguo
             gameDetails: {
-                id: gameData.id,
-                name: gameData.name,
-                image: gameData.image,
-                mainTime: gameData.mainTime,
-                price: gameData.price,
-                rentability: gameData.rentability
+                name:        gameCache.title,
+                id:          gameCache.steamAppID || '',
+                image:       gameCache.imageUrl || '',
+                mainTime:    gameCache.hltb?.mainStory || null,
+                price:       parseFloat(gameCache.currentPrice) || 0,
+                rentability: 0,
             },
             platform,
             status
