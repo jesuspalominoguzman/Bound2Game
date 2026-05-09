@@ -5,7 +5,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/user_model.dart';
-import '../models/game_model.dart';
+import '../models/game_model.dart' hide User;
+import '../services/api_service.dart';
 
 // ── Constantes de color ───────────────────────────────────────────────────────
 const _bg        = Color(0xFF292929);
@@ -15,6 +16,7 @@ const _textMain  = Colors.white;
 const _textSub   = Color(0xFF888888);
 const _yellow    = Color(0xFFFFB800);
 const _green     = Color(0xFF4AF626);
+const _cyan      = Color(0xFF00E5FF);
 
 // Colores de plataformas
 const _colorDiscord  = Color(0xFF5865F2);
@@ -23,7 +25,7 @@ const _colorSteamTxt = Color(0xFF66C0F4);
 const _colorEpic     = Color(0xFF2A2A2A);
 const _colorXbox     = Color(0xFF107C10);
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({
     super.key,
     required this.isOwnProfile,
@@ -31,16 +33,41 @@ class ProfileScreen extends StatelessWidget {
   });
 
   final bool isOwnProfile;
-  final SocialUser? user;
+  final User? user;
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  late Future<User> _profileFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadProfile();
+  }
+
+  void _loadProfile() {
+    if (widget.isOwnProfile) {
+      _profileFuture = ApiService.fetchMyProfile();
+    } else {
+      _profileFuture = Future.value(widget.user!);
+    }
+  }
+
+  // Permite refrescar desde el pull-to-refresh
+  Future<void> _refresh() async {
+    setState(() {
+      _loadProfile();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Si no se pasa usuario, asume el usuario actual (mockUsers[0])
-    final targetUser = user ?? mockUsers[0];
-
     return Scaffold(
       backgroundColor: _bg,
-      appBar: isOwnProfile
+      appBar: widget.isOwnProfile
           ? null
           : AppBar(
               backgroundColor: _bg,
@@ -48,79 +75,140 @@ class ProfileScreen extends StatelessWidget {
               surfaceTintColor: Colors.transparent,
               leading: const BackButton(color: _textMain),
             ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-            
-            // ── Cabecera: Avatar, Nombre y Estado ──────────────────────────
-            _ProfileHeader(user: targetUser),
-            const SizedBox(height: 32),
+      body: FutureBuilder<User>(
+        future: _profileFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: _cyan, strokeWidth: 2),
+            );
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline_rounded, color: _textSub, size: 48),
+                  const SizedBox(height: 16),
+                  Text('Error al cargar perfil', style: TextStyle(color: _textSub)),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: _refresh,
+                    child: const Text('Reintentar', style: TextStyle(color: _cyan)),
+                  )
+                ],
+              ),
+            );
+          }
 
-            // ── Estadísticas Clave ─────────────────────────────────────────
-            const _SectionTitle(title: 'Estadísticas Clave'),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: _KeyStatsGrid(user: targetUser),
-            ),
-            const SizedBox(height: 32),
-
-            // ── Juegos Top ─────────────────────────────────────────────────
-            const _SectionTitle(title: 'Juegos más jugados'),
-            const SizedBox(height: 12),
-            _TopGamesList(user: targetUser),
-            const SizedBox(height: 32),
-
-            // ── Plataformas Vinculadas ─────────────────────────────────────
-            const _SectionTitle(title: 'Plataformas Vinculadas'),
-            const SizedBox(height: 12),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+          final user = snapshot.data!;
+          
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            color: _cyan,
+            backgroundColor: _bgCard,
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
               child: Column(
                 children: [
-                  _PlatformCard(
-                    platform: 'Steam',
-                    nickname: targetUser.username,
-                    bgColor: _colorSteam,
-                    iconColor: _colorSteamTxt,
-                    icon: Icons.videogame_asset,
-                    isOwnProfile: isOwnProfile,
+                  const SizedBox(height: 20),
+                  
+                  // ── Cabecera: Avatar, Nombre y Estado ──────────────────────────
+                  _ProfileHeader(user: user),
+                  const SizedBox(height: 32),
+
+                  // ── Bio ────────────────────────────────────────────────────────
+                  if (user.bio != null && user.bio!.isNotEmpty) ...[
+                    const _SectionTitle(title: 'Sobre mí'),
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: Text(
+                        user.bio!,
+                        style: const TextStyle(fontSize: 14, color: _textSub, height: 1.5),
+                        textAlign: TextAlign.center,
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                  ],
+
+                  // ── Componentes PC (Real de MongoDB) ───────────────────────────
+                  if (user.pcComponents.isNotEmpty) ...[
+                    const _SectionTitle(title: 'Mi Equipo (PC)'),
+                    const SizedBox(height: 12),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: _PcSpecsGrid(specs: user.pcComponents),
+                    ),
+                    const SizedBox(height: 32),
+                  ],
+
+                  // ── Estadísticas Clave ─────────────────────────────────────────
+                  const _SectionTitle(title: 'Estadísticas Clave'),
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _KeyStatsGrid(user: user),
                   ),
-                  const SizedBox(height: 10),
-                  _PlatformCard(
-                    platform: 'Epic Games',
-                    nickname: targetUser.username,
-                    bgColor: _colorEpic,
-                    iconColor: Colors.white,
-                    icon: Icons.games_rounded,
-                    isOwnProfile: isOwnProfile,
+                  const SizedBox(height: 32),
+
+                  // ── Juegos Top (Mock por ahora, a la espera de la librería) ────
+                  const _SectionTitle(title: 'Juegos más jugados'),
+                  const SizedBox(height: 12),
+                  _TopGamesList(),
+                  const SizedBox(height: 32),
+
+                  // ── Plataformas Vinculadas ─────────────────────────────────────
+                  const _SectionTitle(title: 'Plataformas Vinculadas'),
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      children: [
+                        _PlatformCard(
+                          platform: 'Steam',
+                          nickname: user.username,
+                          bgColor: _colorSteam,
+                          iconColor: _colorSteamTxt,
+                          icon: Icons.videogame_asset,
+                          isOwnProfile: widget.isOwnProfile,
+                        ),
+                        const SizedBox(height: 10),
+                        _PlatformCard(
+                          platform: 'Epic Games',
+                          nickname: user.username,
+                          bgColor: _colorEpic,
+                          iconColor: Colors.white,
+                          icon: Icons.games_rounded,
+                          isOwnProfile: widget.isOwnProfile,
+                        ),
+                        const SizedBox(height: 10),
+                        _PlatformCard(
+                          platform: 'Xbox Live',
+                          nickname: '${user.username}#77',
+                          bgColor: _colorXbox.withValues(alpha: 0.15),
+                          iconColor: _colorXbox,
+                          icon: Icons.gamepad_rounded,
+                          isOwnProfile: widget.isOwnProfile,
+                        ),
+                        const SizedBox(height: 10),
+                        _PlatformCard(
+                          platform: 'Discord',
+                          nickname: '${user.username}#1234',
+                          bgColor: _colorDiscord.withValues(alpha: 0.15),
+                          iconColor: _colorDiscord,
+                          icon: Icons.discord,
+                          isOwnProfile: widget.isOwnProfile,
+                        ),
+                      ],
+                    ),
                   ),
-                  const SizedBox(height: 10),
-                  _PlatformCard(
-                    platform: 'Xbox Live',
-                    nickname: '${targetUser.username}#77',
-                    bgColor: _colorXbox.withValues(alpha: 0.15),
-                    iconColor: _colorXbox,
-                    icon: Icons.gamepad_rounded,
-                    isOwnProfile: isOwnProfile,
-                  ),
-                  const SizedBox(height: 10),
-                  _PlatformCard(
-                    platform: 'Discord',
-                    nickname: '${targetUser.username}#1234',
-                    bgColor: _colorDiscord.withValues(alpha: 0.15),
-                    iconColor: _colorDiscord,
-                    icon: Icons.discord,
-                    isOwnProfile: isOwnProfile,
-                  ),
+                  const SizedBox(height: 40),
                 ],
               ),
             ),
-            const SizedBox(height: 40),
-          ],
-        ),
+          );
+        },
       ),
     );
   }
@@ -155,7 +243,7 @@ class _SectionTitle extends StatelessWidget {
 
 class _ProfileHeader extends StatelessWidget {
   const _ProfileHeader({required this.user});
-  final SocialUser user;
+  final User user;
 
   @override
   Widget build(BuildContext context) {
@@ -167,7 +255,7 @@ class _ProfileHeader extends StatelessWidget {
           height: 90,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: user.avatarBgColor ?? _border,
+            color: user.avatarBgColor,
           ),
           child: user.avatarUrl != null && user.avatarUrl!.isNotEmpty
               ? ClipOval(
@@ -178,7 +266,7 @@ class _ProfileHeader extends StatelessWidget {
                 )
               : Center(
                   child: Text(
-                    user.initials ?? user.username[0].toUpperCase(),
+                    user.initials,
                     style: const TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.w800,
@@ -229,35 +317,98 @@ class _ProfileHeader extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// _PcSpecsGrid
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PcSpecsGrid extends StatelessWidget {
+  const _PcSpecsGrid({required this.specs});
+  final Map<String, dynamic> specs;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _bgCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        children: [
+          _PcSpecRow(icon: Icons.memory_rounded, label: 'CPU', value: specs['cpu']?.toString() ?? '-'),
+          const Divider(color: _border, height: 24),
+          _PcSpecRow(icon: Icons.developer_board_rounded, label: 'GPU', value: specs['gpu']?.toString() ?? '-'),
+          const Divider(color: _border, height: 24),
+          _PcSpecRow(icon: Icons.sd_storage_rounded, label: 'RAM', value: '${specs['ram'] ?? '-'} GB'),
+          const Divider(color: _border, height: 24),
+          _PcSpecRow(icon: Icons.storage_rounded, label: 'Storage', value: specs['storage']?.toString() ?? '-'),
+        ],
+      ),
+    );
+  }
+}
+
+class _PcSpecRow extends StatelessWidget {
+  const _PcSpecRow({required this.icon, required this.label, required this.value});
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: _cyan),
+        const SizedBox(width: 12),
+        SizedBox(
+          width: 60,
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: _textSub, fontWeight: FontWeight.w600),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value.isEmpty ? 'No especificado' : value,
+            style: const TextStyle(fontSize: 13, color: _textMain, fontWeight: FontWeight.w500),
+            textAlign: TextAlign.right,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
 // _KeyStatsGrid
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _KeyStatsGrid extends StatelessWidget {
   const _KeyStatsGrid({required this.user});
-  final SocialUser user;
+  final User user;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Un grid limpio 2x1 para Horas y Juegos
         return GridView.count(
           crossAxisCount: 2,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
-          childAspectRatio: 2.2, // Tarjetas más anchas que altas
+          childAspectRatio: 2.2,
           children: [
             _StatCard(
-              icon: Icons.timer_rounded,
-              title: 'Horas Totales',
-              value: '${(user.level * 15) + 120}h',
+              icon: Icons.group_rounded,
+              title: 'Amigos',
+              value: '${user.friends.length}',
             ),
             _StatCard(
-              icon: Icons.sports_esports_rounded,
-              title: 'Juegos',
-              value: '${user.commonGames + 15}',
+              icon: Icons.stars_rounded,
+              title: 'Karma',
+              value: '${user.karma}',
             ),
           ],
         );
@@ -295,7 +446,7 @@ class _StatCard extends StatelessWidget {
               Icon(icon, size: 14, color: _yellow),
               const SizedBox(width: 6),
               Text(
-                title,
+               title,
                 style: const TextStyle(
                   fontSize: 11,
                   color: _textSub,
@@ -324,12 +475,8 @@ class _StatCard extends StatelessWidget {
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _TopGamesList extends StatelessWidget {
-  const _TopGamesList({required this.user});
-  final SocialUser user;
-
   @override
   Widget build(BuildContext context) {
-    // Tomamos hasta 10 juegos
     final topGames = sampleGames.take(10).toList();
     
     return SizedBox(
@@ -383,7 +530,6 @@ class _PlatformCard extends StatelessWidget {
 
   void _handleTap(BuildContext context) {
     if (isOwnProfile) {
-      // Editar
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Editando $platform...'),
@@ -392,7 +538,6 @@ class _PlatformCard extends StatelessWidget {
         ),
       );
     } else {
-      // Copiar ID al portapapeles
       Clipboard.setData(ClipboardData(text: nickname));
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -434,7 +579,7 @@ class _PlatformCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    isOwnProfile ? nickname : nickname, // Mostrar siempre el ID
+                    nickname,
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w700,

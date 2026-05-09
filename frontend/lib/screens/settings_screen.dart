@@ -6,6 +6,8 @@
 import 'package:flutter/material.dart';
 import '../models/deal_model.dart';
 import '../services/deals_prefs_service.dart';
+import '../services/api_service.dart';
+import '../services/auth_service.dart';
 
 const _bg      = Color(0xFF101010);
 const _bgCard  = Color(0xFF181818);
@@ -18,6 +20,7 @@ const _cyan    = Color(0xFF00E5FF);
 const _green   = Color(0xFF4AF626);
 const _yellow  = Color(0xFFFFB800);
 const _purple  = Color(0xFF7B61FF);
+const _red     = Color(0xFFFF4040);
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -30,11 +33,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
   DealsPrefService? _svc;
   bool _loading = true;
 
+  final _cpuCtrl = TextEditingController();
+  final _gpuCtrl = TextEditingController();
+  final _ramCtrl = TextEditingController();
+  final _storageCtrl = TextEditingController();
+
   @override
   void initState() {
     super.initState();
     DealsPrefService.instance.then((s) {
       if (mounted) setState(() { _svc = s; _loading = false; });
+    });
+    AuthService.getCurrentUser().then((user) {
+      if (user != null && mounted) {
+        final pc = user.pcComponents;
+        _cpuCtrl.text = pc['cpu']?.toString() ?? '';
+        _gpuCtrl.text = pc['gpu']?.toString() ?? '';
+        _ramCtrl.text = pc['ram']?.toString() ?? '';
+        _storageCtrl.text = pc['storage']?.toString() ?? '';
+      }
     });
   }
 
@@ -84,6 +101,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 8),
                   _StoreVisibilityCard(svc: _svc!, onChanged: () => setState(() {})),
+
+                  const SizedBox(height: 24),
+
+                  // ── Sección: Componentes de PC ────────────────────────
+                  _SectionLabel(
+                    icon: Icons.computer_rounded,
+                    iconColor: _green,
+                    title: 'Especificaciones de tu PC',
+                    subtitle: 'Usado para calcular compatibilidad',
+                  ),
+                  const SizedBox(height: 8),
+                  _PcComponentsCard(
+                    cpuCtrl: _cpuCtrl,
+                    gpuCtrl: _gpuCtrl,
+                    ramCtrl: _ramCtrl,
+                    storageCtrl: _storageCtrl,
+                  ),
 
                   const SizedBox(height: 24),
 
@@ -374,6 +408,137 @@ class _GeneralCard extends StatelessWidget {
           );
         }).toList(),
       ),
+    );
+  }
+}
+
+// =============================================================================
+// _PcComponentsCard — Formulario de especificaciones de hardware
+// =============================================================================
+
+class _PcComponentsCard extends StatefulWidget {
+  const _PcComponentsCard({
+    required this.cpuCtrl,
+    required this.gpuCtrl,
+    required this.ramCtrl,
+    required this.storageCtrl,
+  });
+
+  final TextEditingController cpuCtrl;
+  final TextEditingController gpuCtrl;
+  final TextEditingController ramCtrl;
+  final TextEditingController storageCtrl;
+
+  @override
+  State<_PcComponentsCard> createState() => _PcComponentsCardState();
+}
+
+class _PcComponentsCardState extends State<_PcComponentsCard> {
+  bool _saving = false;
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      await ApiService.updatePcComponents(
+        cpu: widget.cpuCtrl.text.trim(),
+        gpu: widget.gpuCtrl.text.trim(),
+        ram: double.tryParse(widget.ramCtrl.text.trim()),
+        storage: widget.storageCtrl.text.trim(),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('Componentes actualizados correctamente', style: TextStyle(color: _green, fontSize: 13)),
+          backgroundColor: _bgCard,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: const BorderSide(color: _border)),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e', style: const TextStyle(color: _red, fontSize: 13)),
+          backgroundColor: _bgCard,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: const BorderSide(color: _border)),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _bgCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _TextFieldRow(label: 'CPU', ctrl: widget.cpuCtrl, hint: 'Ej. i7-13700K'),
+          const SizedBox(height: 12),
+          _TextFieldRow(label: 'GPU', ctrl: widget.gpuCtrl, hint: 'Ej. RTX 4070'),
+          const SizedBox(height: 12),
+          _TextFieldRow(label: 'RAM (GB)', ctrl: widget.ramCtrl, hint: 'Ej. 32', keyboardType: TextInputType.number),
+          const SizedBox(height: 12),
+          _TextFieldRow(label: 'Disco', ctrl: widget.storageCtrl, hint: 'Ej. 1TB NVMe'),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 42,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _yellow,
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                elevation: 0,
+              ),
+              onPressed: _saving ? null : _save,
+              child: _saving 
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
+                : const Text('Guardar Especificaciones', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TextFieldRow extends StatelessWidget {
+  const _TextFieldRow({required this.label, required this.ctrl, required this.hint, this.keyboardType});
+  final String label, hint;
+  final TextEditingController ctrl;
+  final TextInputType? keyboardType;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        SizedBox(
+          width: 80,
+          child: Text(label, style: const TextStyle(color: _textMain, fontSize: 13, fontWeight: FontWeight.w600)),
+        ),
+        Expanded(
+          child: TextField(
+            controller: ctrl,
+            keyboardType: keyboardType,
+            style: const TextStyle(color: Colors.white, fontSize: 13),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: const TextStyle(color: _textMuted),
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              filled: true,
+              fillColor: _bgCard2,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

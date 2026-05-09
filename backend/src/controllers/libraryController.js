@@ -1,11 +1,13 @@
 const UserLibrary = require('../models/UserLibrary');
 const GameCache   = require('../models/GameCache');
+const gameService = require('../services/gameService');
+const User        = require('../models/User');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // GET /api/users/:userId/library
 // Devuelve todas las entradas de la biblioteca del usuario con datos del juego
 // ─────────────────────────────────────────────────────────────────────────────
-const getLibrary = async (req, res) => {
+const getUserLibrary = async (req, res) => {
     try {
         const { userId } = req.params;
 
@@ -13,85 +15,109 @@ const getLibrary = async (req, res) => {
             .populate('gameId')
             .sort({ addedAt: -1 });
 
-        // Transformar al formato que el frontend espera
-        const library = entries.map(entry => {
-            const game = entry.gameId; // GameCache poblado
-            return {
-                entryId:      entry._id,
-                userId:       entry.userId,
-                platform:     entry.platform,
-                status:       entry.status,
-                personalNote: entry.personalNote,
-                addedAt:      entry.addedAt,
-                game: game ? {
-                    _id:             game._id,
-                    title:           game.title,
-                    steamAppID:      game.steamAppID,
-                    imageUrl:        game.imageUrl || '',
-                    hltb:            game.hltb,
-                    requirements:    game.requirements,
-                    lastPriceUpdate: game.lastPriceUpdate,
-                    createdAt:       game.createdAt,
-                } : null,
-            };
-        });
-
-        return res.json({ library });
+        return res.json({ library: entries });
     } catch (error) {
-        console.error('Error en getLibrary:', error);
+        console.error('Error en getUserLibrary:', error);
         return res.status(500).json({ error: 'Error interno al obtener la biblioteca' });
     }
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /api/users/:userId/library
-// Añade un juego a la biblioteca del usuario
-// Body: { gameTitle, platform?, status? }
+// Añade un juego a la biblioteca del usuario buscando por API
+// Body: { gameName, platform?, status? }
 // ─────────────────────────────────────────────────────────────────────────────
-const addGame = async (req, res) => {
+const addGameToLibrary = async (req, res) => {
     try {
         const { userId }   = req.params;
-        const { gameTitle, platform = 'Steam', status = 'Backlog' } = req.body;
+        const { gameName, platform = 'Steam', status = 'Backlog' } = req.body;
 
-        if (!gameTitle) {
-            return res.status(400).json({ error: 'gameTitle es obligatorio' });
+        if (!gameName) {
+            return res.status(400).json({ error: 'gameName es obligatorio' });
         }
 
-        // 1. Buscar o crear el juego en GameCache
-        let game = await GameCache.findOne({
-            title: { $regex: new RegExp(`^${gameTitle}$`, 'i') },
-        });
-
-        if (!game) {
-            // Crear un registro mínimo; el scraping completo se hace al buscar
-            game = new GameCache({ title: gameTitle });
-            await game.save();
+        // 1. Buscar el juego por API
+        const gameData = await gameService.searchGame(gameName);
+        if (!gameData) {
+            return res.status(404).json({ error: 'Juego no encontrado' });
         }
 
-        // 2. Comprobar si ya existe la entrada
-        const existing = await UserLibrary.findOne({ userId, gameId: game._id });
+        // 2. Guardar o actualizar en GameCache
+        let gameCache = await GameCache.findOne({ title: { $regex: new RegExp(`^${gameData.name}$`, 'i') } });
+        if (!gameCache) {
+            gameCache = new GameCache({
+                title: gameData.name,
+                steamAppID: gameData.id,
+                imageUrl: gameData.image,
+                requirements: gameData.requirements,
+                hltb: { mainStory: gameData.mainTime },
+                lastPriceUpdate: Date.now()
+            });
+            await gameCache.save();
+        }
+
+        // 3. Comprobar si ya existe en la biblioteca
+        const existing = await UserLibrary.findOne({ userId, 'gameDetails.name': gameData.name });
         if (existing) {
             return res.status(409).json({ error: 'El juego ya está en tu biblioteca' });
         }
 
-        // 3. Crear la entrada
+        // 4. Añadir a la biblioteca del usuario
         const entry = new UserLibrary({
             userId,
-            gameId:   game._id,
+            gameId: gameCache._id,
+            gameDetails: {
+                id: gameData.id,
+                name: gameData.name,
+                image: gameData.image,
+                mainTime: gameData.mainTime,
+                price: gameData.price,
+                rentability: gameData.rentability
+            },
             platform,
-            status,
+            status
         });
         await entry.save();
 
         return res.status(201).json({
             message: 'Juego añadido a la biblioteca',
-            entryId: entry._id,
-            gameId:  game._id,
-            title:   game.title,
+            entry
         });
     } catch (error) {
-        console.error('Error en addGame:', error);
+        console.error('Error en addGameToLibrary:', error);
         return res.status(500).json({ error: 'Error interno al añadir el juego' });
+    }
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GET /api/users/:userId/library/:entryId
+// Devuelve los detalles de un juego y evalúa la compatibilidad
+// ─────────────────────────────────────────────────────────────────────────────
+const getGameDetails = async (req, res) => {
+    try {
+        const { userId, entryId } = req.params;
+
+        const entry = await UserLibrary.findOne({ _id: entryId, userId }).populate('gameId');
+        if (!entry) {
+            return res.status(404).json({ error: 'Entrada no encontrada' });
+        }
+
+        // Obtener usuario para comparar componentes
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        const requirements = entry.gameId ? entry.gameId.requirements : null;
+        const compatibility = gameService.compareRequirements(user.pcComponents, requirements);
+
+        return res.status(200).json({
+            entry,
+            compatibility
+        });
+    } catch (error) {
+        console.error('Error en getGameDetails:', error);
+        return res.status(500).json({ error: 'Error interno al obtener los detalles del juego' });
     }
 };
 
@@ -184,8 +210,9 @@ const getStats = async (req, res) => {
 };
 
 module.exports = {
-    getLibrary,
-    addGame,
+    getUserLibrary,
+    addGameToLibrary,
+    getGameDetails,
     updateEntry,
     removeGame,
     getStats,

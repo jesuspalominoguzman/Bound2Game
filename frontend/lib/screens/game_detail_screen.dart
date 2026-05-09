@@ -10,6 +10,9 @@ import '../widgets/platform_badge.dart';
 import '../widgets/pc_req_dot.dart';
 import '../widgets/discount_badge.dart';
 
+import '../services/api_service.dart';
+import '../services/auth_service.dart';
+
 // ── Color tokens (tema definitivo #292929/#1A1A1A/#FFB800) ──────────────────
 const _bg      = Color(0xFF292929);
 const _bgCard  = Color(0xFF1A1A1A);
@@ -62,24 +65,86 @@ Color _specColor(int value) {
 // =============================================================================
 
 class GameDetailScreen extends StatefulWidget {
-  const GameDetailScreen({super.key, required this.game});
-  final Game game;
+  const GameDetailScreen({super.key, required this.baseGame, this.entryId});
+  final Game baseGame;
+  final String? entryId;
 
   @override
   State<GameDetailScreen> createState() => _GameDetailScreenState();
 }
 
 class _GameDetailScreenState extends State<GameDetailScreen> {
+  bool _isLoading = false;
+  // String? _error;
+  Game? _fullGame;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadDetails();
+  }
+
+  Future<void> _loadDetails() async {
+    if (widget.entryId == null) {
+      setState(() => _fullGame = widget.baseGame);
+      return;
+    }
+
+    setState(() { _isLoading = true; /* _error = null; */ });
+    try {
+      final user = await AuthService.getCurrentUser();
+      if (user == null) throw Exception('No session');
+
+      final details = await ApiService.getGameDetails(
+        userId: user.id,
+        entryId: widget.entryId!,
+      );
+
+      final apiGame = details['game'] as ApiGame;
+      final compStatus = details['compatibility'] as String?;
+
+      if (mounted) {
+        setState(() {
+          _fullGame = Game(
+            id: widget.baseGame.id,
+            entryId: widget.entryId,
+            title: widget.baseGame.title,
+            platform: widget.baseGame.platform,
+            genre: widget.baseGame.genre,
+            playtime: widget.baseGame.playtime,
+            status: widget.baseGame.status,
+            cover: widget.baseGame.cover,
+            pcReq: PcReq.fromString(compStatus),
+            hasCosmetics: widget.baseGame.hasCosmetics,
+            price: double.tryParse(apiGame.currentPrice ?? '0') ?? widget.baseGame.price,
+            year: apiGame.addedAt?.year ?? widget.baseGame.year,
+            rentability: apiGame.rentability,
+            hltb: HltbTimes(
+              main: apiGame.hltbMainStory?.round(),
+              completionist: apiGame.hltbCompletionist?.round(),
+            ),
+            pcSpecs: widget.baseGame.pcSpecs,
+          );
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          // _error = e.toString();
+          _fullGame = widget.baseGame;
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
   /// ¿El usuario tiene este juego en su biblioteca?
-  /// TODO(backend): Leer de LibraryService.isOwned(game.id).
-  /// En mock: cualquier juego de sampleGames con playtime > 0 se considera "poseído".
-  bool get _isOwned => widget.game.playtime > 0;
+  bool get _isOwned => _fullGame != null && _fullGame!.playtime > 0;
 
   /// Estado del corazón (Lista de Deseados).
   /// Se desmarca automáticamente si _isOwned pasa a true.
   bool _isInWishlist = false;
-
-  Game get g => widget.game;
 
   /// Intenta añadir/quitar el juego de la Lista de Deseados.
   /// Si el juego ya está en la biblioteca, muestra un snackbar informativo.
@@ -118,6 +183,15 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoading || _fullGame == null) {
+      return const Scaffold(
+        backgroundColor: _bg,
+        body: Center(child: CircularProgressIndicator(color: _yellow)),
+      );
+    }
+
+    final game = _fullGame!;
+
     return Scaffold(
       backgroundColor: _bg,
       body: CustomScrollView(
@@ -125,7 +199,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
         slivers: [
           // ── SliverAppBar con imagen Hero ─────────────────────────────────
           _GameSliverAppBar(
-            game: g,
+            game: game,
             isInWishlist: _isInWishlist,
             isOwned:      _isOwned,
             onWishlistToggle: _toggleWishlist,
@@ -139,33 +213,33 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Módulo ROI
-                  _RoiModule(game: g),
+                  _RoiModule(game: game),
                   const SizedBox(height: 16),
 
                   // Módulo Requisitos PC
-                  if (g.pcSpecs != null) ...[
-                    _PcReqModule(game: g),
+                  if (game.pcSpecs != null || game.pcReq != PcReq.yellow) ...[
+                    _PcReqModule(game: game),
                     const SizedBox(height: 16),
                   ],
 
                   // Módulo HLTB
-                  if (g.hltb != null) ...[
-                    _HltbModule(game: g),
+                  if (game.hltb != null) ...[
+                    _HltbModule(game: game),
                     const SizedBox(height: 16),
                   ],
 
                   // Módulo Cosméticos
-                  if (g.hasCosmetics && g.cosmetics != null) ...[
-                    _CosmeticsModule(game: g),
+                  if (game.hasCosmetics && game.cosmetics != null) ...[
+                    _CosmeticsModule(game: game),
                     const SizedBox(height: 16),
                   ],
 
                   // Módulo Comparador de Precios
-                  _PriceCompareModule(game: g),
+                  _PriceCompareModule(game: game),
                   const SizedBox(height: 16),
 
                   // Info general
-                  _InfoModule(game: g),
+                  _InfoModule(game: game),
                 ],
               ),
             ),
@@ -314,7 +388,7 @@ class _RoiModule extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // TODO(backend): Recibir playtime real del servidor.
-    final cph = _costPerHour(game.price, game.playtime);
+    final cph = game.rentability ?? _costPerHour(game.price, game.playtime);
     final color = _roiColor(cph);
     final label = _roiLabel(cph);
 
@@ -417,8 +491,8 @@ class _PcReqModule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final specs = game.pcSpecs!;
     final cfg = game.pcReq.config;
+    final specs = game.pcSpecs;
 
     return _ModuleCard(
       icon: Icons.memory_rounded,
@@ -445,10 +519,20 @@ class _PcReqModule extends StatelessWidget {
           ),
           // Barras de specs
           // TODO(backend): Datos reales de UserPcService.getSpecs()
-          _SpecBar(label: 'CPU', spec: specs.cpu),
-          _SpecBar(label: 'GPU', spec: specs.gpu),
-          _SpecBar(label: 'RAM', spec: specs.ram),
-          _SpecBar(label: 'SSD', spec: specs.storage),
+          if (specs != null) ...[
+            _SpecBar(label: 'CPU', spec: specs.cpu),
+            _SpecBar(label: 'GPU', spec: specs.gpu),
+            _SpecBar(label: 'RAM', spec: specs.ram),
+            _SpecBar(label: 'SSD', spec: specs.storage),
+          ] else
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'Compatibilidad calculada (especificaciones detalladas no disponibles)',
+                style: TextStyle(fontSize: 12, color: _textSub),
+                textAlign: TextAlign.center,
+              ),
+            ),
         ],
       ),
     );
@@ -775,6 +859,7 @@ class _PriceCompareModule extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Cruzar por ID (el campo gameId en GameDeal corresponde a Game.id.toString())
+    final List<GameDeal> sampleDeals = []; // TODO: Fetch from ApiService
     final deals = sampleDeals
         .where((d) => d.gameId == game.id.toString())
         .toList()

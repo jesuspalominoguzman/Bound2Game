@@ -134,8 +134,75 @@ const getHowLongToBeatData = async (title) => {
     }
 };
 
+/**
+ * Busca un juego orquestando las APIs para obtener tiempos, precios y requisitos
+ * @param {string} gameName - Título del juego
+ */
+const searchGame = async (gameName) => {
+    // 1. Obtener datos básicos y precio
+    const cheapSharkData = await getCheapSharkData(gameName);
+    if (!cheapSharkData) return null;
+
+    // 2. Obtener tiempos
+    const hltbData = await getHowLongToBeatData(cheapSharkData.title || gameName);
+    const mainStoryTime = typeof hltbData.main === 'number' ? hltbData.main : 15; // default fallback
+
+    // 3. Simular o calcular precio y rentabilidad
+    const price = parseFloat(cheapSharkData.currentPrice) || 0;
+    const rentability = price > 0 && mainStoryTime > 0 ? parseFloat((price / mainStoryTime).toFixed(2)) : 0;
+
+    // 4. Requisitos de Steam
+    const reqsHTML = await getSteamRequirements(cheapSharkData.steamAppID);
+
+    // Parseo simulado básico (en una app real requeriría extraer datos del HTML)
+    let min_ram = 8;
+    let min_gpu = "GTX 1060";
+    let recommended_ram = 16;
+
+    if (reqsHTML) {
+        if (reqsHTML.includes('4 GB RAM') || reqsHTML.includes('4GB')) min_ram = 4;
+        if (reqsHTML.includes('16 GB RAM') || reqsHTML.includes('16GB')) recommended_ram = 16;
+    }
+
+    return {
+        id: cheapSharkData.steamAppID || Date.now().toString(),
+        name: cheapSharkData.title,
+        image: cheapSharkData.steamAppID ? `https://steamcdn-a.akamaihd.net/steam/apps/${cheapSharkData.steamAppID}/header.jpg` : '',
+        mainTime: mainStoryTime,
+        price: price,
+        rentability: rentability,
+        requirements: {
+            min_ram,
+            min_gpu,
+            recommended_ram
+        }
+    };
+};
+
+/**
+ * Compara los componentes del PC del usuario con los requisitos del juego
+ * @returns {string} - "VERDE", "AMARILLO" o "ROJO"
+ */
+const compareRequirements = (userPcComponents, gameRequirements) => {
+    if (!userPcComponents || !userPcComponents.ram) return "AMARILLO"; // Faltan datos del usuario
+    if (!gameRequirements) return "VERDE"; // Faltan requisitos del juego
+
+    const userRam = Number(userPcComponents.ram) || 0;
+    const minRam = Number(gameRequirements.min_ram) || 0;
+    const recRam = Number(gameRequirements.recommended_ram) || 0;
+
+    // Ejemplo simplificado usando solo la RAM para el prototipo
+    if (userRam >= recRam && recRam > 0) return "VERDE";
+    if (userRam >= minRam && minRam > 0) return "AMARILLO";
+    if (userRam < minRam) return "ROJO";
+    
+    return "VERDE";
+};
+
 module.exports = {
     getCheapSharkData,
     getSteamRequirements,
-    getHowLongToBeatData
+    getHowLongToBeatData,
+    searchGame,
+    compareRequirements
 };

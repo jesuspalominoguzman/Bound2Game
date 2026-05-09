@@ -21,6 +21,7 @@ const _textMuted = Color(0xFF555555);
 const _green   = Color(0xFF4AF626);
 
 // ── Helpers: cruzar GameDeal con sampleGames ──────────────────────────────────
+final List<GameDeal> sampleDeals = []; // TODO: Fetch from ApiService
 
 Platform _storeToGamePlatform(DealStore store) {
   switch (store) {
@@ -259,7 +260,7 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                     storeColor: _cfg.color,
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => GameDetailScreen(game: _resolveGame(deals[i])),
+                        builder: (_) => GameDetailScreen(baseGame: _resolveGame(deals[i])),
                       ),
                     ),
                   ),

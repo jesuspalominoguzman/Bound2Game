@@ -164,16 +164,18 @@ class _LibraryScreenState extends State<LibraryScreen>
     }
     return Game(
       id:           api.id.hashCode,
+      entryId:      api.entryId,
       title:        api.title,
       platform:     platform,
       genre:        'Varios',
       playtime:     0,
       status:       status,
-      cover:        api.coverUrl,
-      pcReq:        PcReq.green,
+      cover:        api.imageUrl,
+      pcReq:        PcReq.yellow, // Por defecto en biblioteca
       hasCosmetics: false,
-      price:        0,
-      year:         DateTime.now().year,
+      price:        double.tryParse(api.currentPrice ?? '0') ?? 0,
+      year:         api.addedAt?.year ?? DateTime.now().year,
+      rentability:  api.rentability,
       hltb: HltbTimes(
         main:          api.hltbMainStory?.round(),
         completionist: api.hltbCompletionist?.round(),
@@ -191,7 +193,10 @@ class _LibraryScreenState extends State<LibraryScreen>
   void _openDetail(BuildContext context, Game game) {
     Navigator.of(context).push(
       PageRouteBuilder(
-        pageBuilder: (context, animation, _) => GameDetailScreen(game: game),
+        pageBuilder: (context, animation, _) => GameDetailScreen(
+          baseGame: game,
+          entryId: game.entryId,
+        ),
         transitionsBuilder: (context, animation, _, child) => FadeTransition(
           opacity: animation,
           child: SlideTransition(

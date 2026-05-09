@@ -79,6 +79,17 @@ enum PcReq {
 
   /// Datos de configuración visual.
   PcReqConfig get config => PcReqConfig.of(this);
+
+  /// Parsea desde el string que devuelve el backend
+  static PcReq fromString(String? status) {
+    if (status == null) return PcReq.yellow;
+    switch (status.toUpperCase()) {
+      case 'VERDE': return PcReq.green;
+      case 'ROJO': return PcReq.red;
+      case 'AMARILLO':
+      default: return PcReq.yellow;
+    }
+  }
 }
 
 /// Niveles de reputación de un usuario.
@@ -173,6 +184,7 @@ class HltbTimes {
 /// Corresponde a `interface Game` en gameData.ts
 class Game {
   final int id;
+  final String? entryId;
   final String title;
   final Platform platform;
   final String genre;
@@ -195,11 +207,15 @@ class Game {
   final int year;
   final PcSpecs? pcSpecs;
 
+  /// Rentabilidad (coste por hora calculado en backend).
+  final double? rentability;
+
   /// Puntuación del juego (0.0–10.0).
   final double? rating;
 
   const Game({
     required this.id,
+    this.entryId,
     required this.title,
     required this.platform,
     required this.genre,
@@ -213,6 +229,7 @@ class Game {
     this.cosmetics,
     this.hltb,
     this.pcSpecs,
+    this.rentability,
     this.rating,
   });
 }

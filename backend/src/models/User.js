@@ -22,6 +22,14 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    bio: {
+        type: String,
+        default: ''
+    },
+    karma: {
+        type: Number,
+        default: 0
+    },
     steamId: {
         type: String,
         default: ''
@@ -40,6 +48,12 @@ const userSchema = new mongoose.Schema({
         gpu: { type: String, default: '' },
         ram: { type: Number, default: 0 },
         vram: { type: Number, default: 0 }
+    },
+    pcComponents: {
+        cpu: { type: String, default: '' },
+        gpu: { type: String, default: '' },
+        ram: { type: Number, default: 0 },
+        storage: { type: String, default: '' }
     },
     preferences: {
         playSchedule: [{

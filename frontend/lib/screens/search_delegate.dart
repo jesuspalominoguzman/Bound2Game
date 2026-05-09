@@ -107,7 +107,7 @@ class B2GSearchDelegate extends SearchDelegate<String> {
           onTap: () {
             close(context, game.title);
             Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => GameDetailScreen(game: game)),
+              MaterialPageRoute(builder: (_) => GameDetailScreen(baseGame: game)),
             );
           },
         );

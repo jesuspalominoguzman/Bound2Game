@@ -19,7 +19,7 @@ class AuthUser {
   final String email;
   final String avatarUrl;
   final Map<String, dynamic> reputation;
-  final Map<String, dynamic> hardwareSpecs;
+  final Map<String, dynamic> pcComponents;
 
   const AuthUser({
     required this.id,
@@ -27,7 +27,7 @@ class AuthUser {
     required this.email,
     this.avatarUrl = '',
     this.reputation = const {},
-    this.hardwareSpecs = const {},
+    this.pcComponents = const {},
   });
 
   factory AuthUser.fromJson(Map<String, dynamic> json) {
@@ -37,7 +37,7 @@ class AuthUser {
       email:         json['email']?.toString()     ?? '',
       avatarUrl:     json['avatarUrl']?.toString() ?? '',
       reputation:    (json['reputation']   as Map<String, dynamic>?) ?? {},
-      hardwareSpecs: (json['hardwareSpecs'] as Map<String, dynamic>?) ?? {},
+      pcComponents:  (json['pcComponents'] as Map<String, dynamic>?) ?? {},
     );
   }
 
@@ -47,7 +47,7 @@ class AuthUser {
     'email':         email,
     'avatarUrl':     avatarUrl,
     'reputation':    reputation,
-    'hardwareSpecs': hardwareSpecs,
+    'pcComponents':  pcComponents,
   };
 }
 

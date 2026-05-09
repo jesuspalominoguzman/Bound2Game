@@ -66,10 +66,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final results = await Future.wait([
       ApiService.getLibrary(userId),
       ApiService.getStats(userId),
+      ApiService.fetchFriends(),
     ]);
     return _DashboardData(
       games: results[0] as List<ApiGame>,
       stats: results[1] as LibraryStats,
+      friends: results[2] as List<User>,
     );
   }
 
@@ -81,7 +83,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final onlineUsers = mockUsers.where((u) => u.isOnline).take(4).toList();
 
     if (_future == null) {
       // Todavía cargando el userId de SharedPreferences
@@ -105,6 +106,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final data        = snapshot.data!;
         final recentGames = data.games.take(4).toList();
         final stats       = data.stats;
+        final onlineUsers = data.friends.where((u) => u.isOnline).take(4).toList();
 
         return ListView(
           padding: const EdgeInsets.fromLTRB(16, 20, 16, 40),
@@ -145,7 +147,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
 class _DashboardData {
   final List<ApiGame>  games;
   final LibraryStats   stats;
-  const _DashboardData({required this.games, required this.stats});
+  final List<User>     friends;
+  const _DashboardData({required this.games, required this.stats, required this.friends});
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -489,7 +492,7 @@ class _ErrorState extends StatelessWidget {
 
 class _ActiveUsersList extends StatelessWidget {
   const _ActiveUsersList({required this.users});
-  final List<SocialUser> users;
+  final List<User> users;
 
   @override
   Widget build(BuildContext context) {
@@ -504,11 +507,10 @@ class _ActiveUsersList extends StatelessWidget {
 
 class _UserCard extends StatelessWidget {
   const _UserCard({required this.user});
-  final SocialUser user;
+  final User user;
 
   @override
   Widget build(BuildContext context) {
-    final repCfg = user.reputation.config;
     // Indicador online: siempre verde ya que filtramos solo online
     const kOnlineGreen = Color(0xFF39FF7E);
 
@@ -534,8 +536,8 @@ class _UserCard extends StatelessWidget {
                   height: 42,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    border: Border.all(color: repCfg.color, width: 2),
-                    color: user.avatarBgColor ?? _kBgCard,
+                    border: Border.all(color: _kYellow, width: 2),
+                    color: user.avatarBgColor,
                   ),
                   child: user.avatarUrl != null
                       ? ClipOval(
@@ -591,7 +593,7 @@ class _UserCard extends StatelessWidget {
                         const Icon(Icons.star_rounded, size: 11, color: _kYellow),
                         const SizedBox(width: 2),
                         Text(
-                          '${user.reputationScore}',
+                          '${user.karma}',
                           style: GoogleFonts.inter(fontSize: 11, color: _kMuted),
                         ),
                       ]),
@@ -599,16 +601,16 @@ class _UserCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    user.reputationLabel,
+                    'Karma',
                     style: GoogleFonts.inter(
                       fontSize: 11,
-                      color: repCfg.color,
+                      color: _kYellow,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   const SizedBox(height: 3),
                   Text(
-                    '${user.commonGames} juegos en común · Nv.${user.level}',
+                    '${user.friends.length} amigos',
                     style: GoogleFonts.inter(fontSize: 10, color: _kSub),
                   ),
                 ],

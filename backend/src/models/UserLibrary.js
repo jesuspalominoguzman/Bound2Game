@@ -8,8 +8,15 @@ const userLibrarySchema = new mongoose.Schema({
     },
     gameId: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'GameCache',
-        required: true
+        ref: 'GameCache'
+    },
+    gameDetails: {
+        id: { type: String },
+        name: { type: String, required: true },
+        image: { type: String },
+        mainTime: { type: Number },
+        price: { type: Number },
+        rentability: { type: Number }
     },
     platform: {
         type: String,

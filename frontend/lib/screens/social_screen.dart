@@ -1,11 +1,12 @@
 // =============================================================================
-// social_screen.dart — Bound2Game Flutter (Android)
+// social_screen.dart — Bound2Game Flutter
 // =============================================================================
 
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
-import '../models/game_model.dart';
+import '../models/game_model.dart' hide User;
 import '../widgets/user_card.dart';
+import '../services/api_service.dart';
 import 'game_detail_screen.dart';
 
 // ── Constantes de color ───────────────────────────────────────────────────────
@@ -17,6 +18,7 @@ const _textMuted = Color(0xFF555555);
 const _textSub   = Color(0xFF888888);
 const _green     = Color(0xFF4AF626);
 const _yellow    = Color(0xFFFFB800);
+const _cyan      = Color(0xFF00E5FF);
 
 class SocialScreen extends StatefulWidget {
   const SocialScreen({super.key});
@@ -32,35 +34,29 @@ class _SocialScreenState extends State<SocialScreen> {
   bool _showOnlineOnly = false;
   String _searchQuery = '';
 
-  // Simulamos que los usuarios con ID 1, 5 y 7 son amigos
-  bool _isUserFriend(SocialUser user) => [1, 5, 7].contains(user.id);
-
-  List<SocialUser> get _filteredUsers {
-    return mockUsers.where((user) {
-      final isFriend = _isUserFriend(user);
-      if (!isFriend) return false; // Solo amigos en la lista inferior
-
-      final matchesSearch = _searchQuery.isEmpty ||
-          user.username.toLowerCase().contains(_searchQuery) ||
-          user.tags.any((t) => t.toLowerCase().contains(_searchQuery));
-      final matchesOnline = !_showOnlineOnly || user.isOnline;
-      return matchesSearch && matchesOnline;
-    }).toList();
-  }
-
-  List<SocialUser> get _highAffinityUsers =>
-      mockUsers.where((u) => u.affinityScore >= 50 && !_isUserFriend(u)).toList()
-        ..sort((a, b) => b.affinityScore.compareTo(a.affinityScore));
+  late Future<List<User>> _friendsFuture;
 
   @override
   void initState() {
     super.initState();
+    _loadFriends();
+    
     _searchCtrl.addListener(
       () => setState(() => _searchQuery = _searchCtrl.text.trim().toLowerCase()),
     );
     _searchFocus.addListener(
       () => setState(() => _isSearchFocused = _searchFocus.hasFocus),
     );
+  }
+
+  void _loadFriends() {
+    _friendsFuture = ApiService.fetchFriends();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _loadFriends();
+    });
   }
 
   @override
@@ -72,160 +68,164 @@ class _SocialScreenState extends State<SocialScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final filtered = _filteredUsers;
-    final highAffinity = _highAffinityUsers;
-    // Solo contar amigos online
-    final onlineCount = mockUsers.where((u) => u.isOnline && _isUserFriend(u)).length;
-
     return Scaffold(
       backgroundColor: _bg,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          const SliverToBoxAdapter(child: SizedBox(height: 16)),
-
-          // ── Sección 1: Populares entre tus amigos ──────────────────────────
-          SliverToBoxAdapter(
-            child: const _SectionHeader(title: 'Populares entre tus amigos'),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 12)),
-          SliverToBoxAdapter(
-            child: SizedBox(
-              height: 140,
-              child: ListView.separated(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                scrollDirection: Axis.horizontal,
-                physics: const BouncingScrollPhysics(),
-                itemCount: sampleGames.length,
-                separatorBuilder: (_, _) => const SizedBox(width: 12),
-                itemBuilder: (context, index) {
-                  final game = sampleGames[index];
-                  // Asignamos 2 o 3 amigos mockeados al azar a cada juego
-                  final playingFriends = mockUsers
-                      .where((u) => _isUserFriend(u))
-                      .take((index % 2) + 2)
-                      .toList();
-                  
-                  return GestureDetector(
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => GameDetailScreen(game: game),
-                        ),
-                      );
-                    },
-                    child: _GameCoverCard(game: game, playingFriends: playingFriends),
-                  );
-                },
-              ),
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 32)),
-
-          // ── Sección 2: Jugadores afines a ti ──────────────────────────────
-          if (highAffinity.isNotEmpty) ...[
-            SliverToBoxAdapter(
-              child: const _SectionHeader(title: 'Jugadores afines a ti'),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 12)),
-            SliverToBoxAdapter(
-              child: SizedBox(
-                height: 120, // Altura ajustada para solucionar bottom overflow
-                child: ListView.separated(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  scrollDirection: Axis.horizontal,
-                  physics: const BouncingScrollPhysics(),
-                  itemCount: highAffinity.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 12),
-                  itemBuilder: (context, index) {
-                    return SizedBox(
-                      width: 280, // Ancho fijo para horizontal
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min, // Solución para overflow
-                        children: [
-                          UserCard(
-                            user: highAffinity[index],
-                            isFriend: false, // Solo usuarios estado 1
-                          ),
-                        ],
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            const SliverToBoxAdapter(child: SizedBox(height: 32)),
-          ],
-
-          // ── Sección 3: Tus Amigos ──────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
+      body: FutureBuilder<List<User>>(
+        future: _friendsFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(
+              child: CircularProgressIndicator(color: _cyan, strokeWidth: 2),
+            );
+          }
+          if (snapshot.hasError) {
+            return Center(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Tus Amigos',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.w800,
-                          color: _textMain,
-                        ),
-                      ),
-                      Text(
-                        '${filtered.length} encontrados',
-                        style: const TextStyle(fontSize: 12, color: _textSub),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _SocialSearchBar(
-                          controller: _searchCtrl,
-                          focusNode: _searchFocus,
-                          isFocused: _isSearchFocused,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      _OnlineToggleButton(
-                        isActive: _showOnlineOnly,
-                        count: onlineCount,
-                        onTap: () => setState(() => _showOnlineOnly = !_showOnlineOnly),
-                      ),
-                    ],
-                  ),
+                  const Icon(Icons.error_outline_rounded, color: _textSub, size: 48),
+                  const SizedBox(height: 16),
+                  Text('Error al cargar amigos', style: TextStyle(color: _textSub)),
+                  const SizedBox(height: 16),
+                  TextButton(
+                    onPressed: _refresh,
+                    child: const Text('Reintentar', style: TextStyle(color: _cyan)),
+                  )
                 ],
               ),
-            ),
-          ),
-          const SliverToBoxAdapter(child: SizedBox(height: 16)),
+            );
+          }
 
-          // ── Lista de amigos ────────────────────────────────────────────────
-          filtered.isEmpty
-              ? SliverToBoxAdapter(
-                  child: _EmptySocialState(query: _searchQuery),
-                )
-              : SliverPadding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  sliver: SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, index) => UserCard(
-                        user: filtered[index],
-                        isFriend: true, // Forzar estado 3
-                      ),
-                      childCount: filtered.length,
+          final friends = snapshot.data ?? [];
+          
+          final filtered = friends.where((user) {
+            final matchesSearch = _searchQuery.isEmpty ||
+                user.username.toLowerCase().contains(_searchQuery);
+            final matchesOnline = !_showOnlineOnly || user.isOnline;
+            return matchesSearch && matchesOnline;
+          }).toList();
+
+          final onlineCount = friends.where((u) => u.isOnline).length;
+
+          return RefreshIndicator(
+            onRefresh: _refresh,
+            color: _cyan,
+            backgroundColor: _bgCard,
+            child: CustomScrollView(
+              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+              slivers: [
+                const SliverToBoxAdapter(child: SizedBox(height: 16)),
+
+                // ── Sección 1: Populares entre tus amigos (Simulada por ahora)
+                SliverToBoxAdapter(
+                  child: const _SectionHeader(title: 'Populares entre tus amigos'),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 12)),
+                SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 140,
+                    child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      scrollDirection: Axis.horizontal,
+                      physics: const BouncingScrollPhysics(),
+                      itemCount: sampleGames.length,
+                      separatorBuilder: (_, _) => const SizedBox(width: 12),
+                      itemBuilder: (context, index) {
+                        final game = sampleGames[index];
+                        final playingFriends = friends.take((index % 2) + 2).toList();
+                        
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => GameDetailScreen(baseGame: game),
+                              ),
+                            );
+                          },
+                          child: _GameCoverCard(game: game, playingFriends: playingFriends),
+                        );
+                      },
                     ),
                   ),
                 ),
+                const SliverToBoxAdapter(child: SizedBox(height: 32)),
 
-          // Padding inferior
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
-        ],
+                // ── Sección 2: Tus Amigos ──────────────────────────────────────────
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Text(
+                              'Tus Amigos',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: _textMain,
+                              ),
+                            ),
+                            Text(
+                              '${filtered.length} encontrados',
+                              style: const TextStyle(fontSize: 12, color: _textSub),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _SocialSearchBar(
+                                controller: _searchCtrl,
+                                focusNode: _searchFocus,
+                                isFocused: _isSearchFocused,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            _OnlineToggleButton(
+                              isActive: _showOnlineOnly,
+                              count: onlineCount,
+                              onTap: () => setState(() => _showOnlineOnly = !_showOnlineOnly),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 16)),
+
+                // ── Lista de amigos ────────────────────────────────────────────────
+                friends.isEmpty
+                    ? SliverToBoxAdapter(
+                        child: _NoFriendsState(),
+                      )
+                    : filtered.isEmpty
+                        ? SliverToBoxAdapter(
+                            child: _EmptySocialState(query: _searchQuery),
+                          )
+                        : SliverPadding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            sliver: SliverList(
+                              delegate: SliverChildBuilderDelegate(
+                                (context, index) => UserCard(
+                                  user: filtered[index],
+                                  isFriend: true,
+                                ),
+                                childCount: filtered.length,
+                              ),
+                            ),
+                          ),
+
+                // Padding inferior
+                const SliverToBoxAdapter(child: SizedBox(height: 100)),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -258,7 +258,7 @@ class _GameCoverCard extends StatelessWidget {
   });
   
   final Game game;
-  final List<SocialUser> playingFriends;
+  final List<User> playingFriends;
 
   @override
   Widget build(BuildContext context) {
@@ -279,7 +279,6 @@ class _GameCoverCard extends StatelessWidget {
           )
         ],
       ),
-      // Face Pile usando Stack
       child: Stack(
         children: [
           if (playingFriends.isNotEmpty)
@@ -289,19 +288,18 @@ class _GameCoverCard extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: playingFriends.asMap().entries.map((entry) {
-                  final index = entry.key;
                   final friend = entry.value;
                   return Align(
-                    widthFactor: 0.6, // Solapamiento
+                    widthFactor: 0.6,
                     child: Container(
                       width: 24,
                       height: 24,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
                         border: Border.all(color: _bgCard, width: 1.5),
-                        color: friend.avatarBgColor ?? const Color(0xFF1C1C1C),
+                        color: friend.avatarBgColor,
                       ),
-                      child: friend.avatarUrl != null
+                      child: friend.avatarUrl != null && friend.avatarUrl!.isNotEmpty
                           ? ClipOval(
                               child: Image.network(
                                 friend.avatarUrl!,
@@ -323,13 +321,13 @@ class _GameCoverCard extends StatelessWidget {
 
 class _FallbackInitial extends StatelessWidget {
   const _FallbackInitial({required this.user});
-  final SocialUser user;
+  final User user;
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Text(
-        user.initials ?? '?',
+        user.initials,
         style: const TextStyle(
           color: Colors.white,
           fontSize: 8,
@@ -341,7 +339,7 @@ class _FallbackInitial extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Componentes de Búsqueda y Filtro (Preservados y ajustados)
+// Componentes de Búsqueda y Filtro
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _SocialSearchBar extends StatelessWidget {
@@ -457,6 +455,10 @@ class _OnlineToggleButton extends StatelessWidget {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Estados Vacíos
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _EmptySocialState extends StatelessWidget {
   const _EmptySocialState({required this.query});
   final String query;
@@ -491,6 +493,54 @@ class _EmptySocialState extends StatelessWidget {
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
                 color: _textMain,
+              ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NoFriendsState extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 48),
+      child: Center(
+        child: Column(
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: _cyan.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.people_alt_rounded,
+                color: _cyan,
+                size: 36,
+              ),
+            ),
+            const SizedBox(height: 24),
+            const Text(
+              'Aún no tienes amigos en Bound2Game',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: _textMain,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Encuentra a otros jugadores usando\nla barra de búsqueda superior.',
+              style: TextStyle(
+                fontSize: 14,
+                color: _textSub,
+                height: 1.4,
               ),
               textAlign: TextAlign.center,
             ),

@@ -20,17 +20,30 @@ router.post('/register', userController.registerUser);
 router.post('/login', userController.loginUser);
 
 // GET /api/users/profile (Ruta Protegida)
+// También mapeamos /me por conveniencia según petición
 router.get('/profile', authMiddleware, userController.getProfile);
+router.get('/me', authMiddleware, userController.getProfile);
+
+// GET /api/users/friends (Lista de amigos)
+router.get('/friends', authMiddleware, userController.getUserFriends);
+
+// GET /api/users/search?q=name (Buscar nuevos amigos)
+router.get('/search', authMiddleware, userController.searchUsers);
+
+// PUT /api/users/me/pc-components (Ruta Protegida)
+router.put('/me/pc-components', authMiddleware, userController.updatePcComponents);
 
 // ── Biblioteca del usuario ─────────────────────────────────────────────────────
 // GET    /api/users/:userId/library          → obtener todos los juegos
 // POST   /api/users/:userId/library          → añadir juego
+// GET    /api/users/:userId/library/:entryId → detalles de juego y compatibilidad
 // PATCH  /api/users/:userId/library/:entryId → actualizar estado/nota
 // DELETE /api/users/:userId/library/:entryId → eliminar entrada
 // GET    /api/users/:userId/stats            → estadísticas resumidas
 
-router.get   ('/:userId/library',             authMiddleware, verifyOwnership, libraryController.getLibrary);
-router.post  ('/:userId/library',             authMiddleware, verifyOwnership, libraryController.addGame);
+router.get   ('/:userId/library',             authMiddleware, verifyOwnership, libraryController.getUserLibrary);
+router.post  ('/:userId/library',             authMiddleware, verifyOwnership, libraryController.addGameToLibrary);
+router.get   ('/:userId/library/:entryId',    authMiddleware, verifyOwnership, libraryController.getGameDetails);
 router.patch ('/:userId/library/:entryId',    authMiddleware, verifyOwnership, libraryController.updateEntry);
 router.delete('/:userId/library/:entryId',    authMiddleware, verifyOwnership, libraryController.removeGame);
 router.get   ('/:userId/stats',               authMiddleware, verifyOwnership, libraryController.getStats);

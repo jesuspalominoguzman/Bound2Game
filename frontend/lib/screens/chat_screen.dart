@@ -108,7 +108,7 @@ class ChatScreen extends StatefulWidget {
     /// ordenando los IDs de ambos usuarios para garantizar unicidad.
     this.roomId,
   });
-  final SocialUser user;
+  final User user;
   final String? roomId;
 
   @override
@@ -165,10 +165,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   /// Genera un roomId estable ordenando los IDs lexicográficamente.
-  /// Acepta el [int] id de [SocialUser] y el userId actual (String).
-  static String _buildRoomId(String currentUserId, int otherUserId) {
+  /// Acepta el [int] id de [User] y el userId actual (String).
+  static String _buildRoomId(String currentUserId, String otherUserId) {
     final a = currentUserId;
-    final b = otherUserId.toString();
+    final b = otherUserId;
     return (a.compareTo(b) <= 0) ? '${a}_$b' : '${b}_$a';
   }
 
@@ -403,7 +403,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
 class _ChatAppBar extends StatelessWidget {
   const _ChatAppBar({required this.user});
-  final SocialUser user;
+  final User user;
 
   @override
   Widget build(BuildContext context) {
@@ -605,7 +605,7 @@ class _MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final String timeLabel;
   final bool showAvatar;
-  final SocialUser user;
+  final User user;
 
   @override
   Widget build(BuildContext context) {

@@ -200,7 +200,7 @@ class _ShakeSelectorScreenState extends State<ShakeSelectorScreen>
                     onRetry: _retry,
                     onDetail: () => Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) => GameDetailScreen(game: _result!),
+                        builder: (_) => GameDetailScreen(baseGame: _result!),
                       ),
                     ),
                   ),

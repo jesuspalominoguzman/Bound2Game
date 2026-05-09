@@ -12,7 +12,6 @@ import '../screens/chat_screen.dart';
 
 // ── Constantes de color ───────────────────────────────────────────────────────
 const _bgCard    = Color(0xFF1A1A1A); // Nueva directriz
-const _bgCard2   = Color(0xFF1C1C1C);
 const _border    = Color(0xFF252525);
 const _textMain  = Colors.white;
 const _textSub   = Color(0xFF888888);
@@ -28,7 +27,7 @@ class UserCard extends StatefulWidget {
     this.isFriend = false,
   });
 
-  final SocialUser user;
+  final User user;
   final bool isFriend;
 
   @override
@@ -135,9 +134,9 @@ class _UserCardState extends State<UserCard> {
                   ),
                   const SizedBox(height: 4),
                   
-                  // Juegos en común
+                  // Juegos en común (temporalmente oculto al no existir en bd real)
                   Text(
-                    '${widget.user.commonGames} juegos en común',
+                    '${widget.user.friends.length} amigos',
                     style: const TextStyle(
                       fontSize: 11,
                       color: _textSub,
@@ -182,7 +181,7 @@ class _UserCardState extends State<UserCard> {
 
 class _UserAvatar extends StatelessWidget {
   const _UserAvatar({required this.user});
-  final SocialUser user;
+  final User user;
 
   @override
   Widget build(BuildContext context) {
@@ -191,7 +190,7 @@ class _UserAvatar extends StatelessWidget {
       height: 52,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        color: user.avatarBgColor ?? _bgCard2,
+        color: user.avatarBgColor,
       ),
       child: user.avatarUrl != null
           ? ClipOval(
@@ -209,13 +208,13 @@ class _UserAvatar extends StatelessWidget {
 
 class _InitialsContent extends StatelessWidget {
   const _InitialsContent({required this.user});
-  final SocialUser user;
+  final User user;
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Text(
-        user.initials ?? '?',
+        user.initials,
         style: const TextStyle(
           color: Colors.white,
           fontSize: 18,

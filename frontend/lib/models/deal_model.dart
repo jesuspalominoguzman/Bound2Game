@@ -10,6 +10,71 @@
 import 'package:flutter/material.dart';
 
 // =============================================================================
+// MODEL: Deal (Nueva integración API backend)
+// =============================================================================
+
+class Deal {
+  final String id;
+  final String title;
+  final double normalPrice;
+  final double salePrice;
+  final String storeName;
+  final String thumbUrl;
+  final String category;
+
+  const Deal({
+    required this.id,
+    required this.title,
+    required this.normalPrice,
+    required this.salePrice,
+    required this.storeName,
+    required this.thumbUrl,
+    required this.category,
+  });
+
+  factory Deal.fromJson(Map<String, dynamic> json) {
+    return Deal(
+      id: json['gameId']?.toString() ?? json['_id']?.toString() ?? '',
+      title: json['title']?.toString() ?? 'Unknown',
+      normalPrice: (json['originalPrice'] as num?)?.toDouble() ?? 0.0,
+      salePrice: (json['salePrice'] as num?)?.toDouble() ?? 0.0,
+      storeName: json['storeName']?.toString() ?? json['storeID']?.toString() ?? 'Steam',
+      thumbUrl: json['thumb']?.toString() ?? '',
+      category: json['category']?.toString() ?? 'DEAL',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'gameId': id,
+      'title': title,
+      'originalPrice': normalPrice,
+      'salePrice': salePrice,
+      'storeName': storeName,
+      'thumb': thumbUrl,
+      'category': category,
+    };
+  }
+
+  DealStore get storeEnum {
+    final s = storeName.toLowerCase();
+    if (s.contains('epic')) return DealStore.epic;
+    if (s.contains('playstation') || s.contains('psn') || s.contains('psstore')) return DealStore.psStore;
+    if (s.contains('xbox') || s.contains('microsoft')) return DealStore.xbox;
+    if (s.contains('nintendo')) return DealStore.nintendo;
+    if (s.contains('instant')) return DealStore.instantGaming;
+    return DealStore.steam;
+  }
+
+  int get calculatedDiscount {
+    if (normalPrice <= 0 || salePrice <= 0) return 0;
+    if (salePrice >= normalPrice) return 0;
+    return ((1 - (salePrice / normalPrice)) * 100).round();
+  }
+}
+
+
+// =============================================================================
 // ENUM: PlayerMode — Modo de juego
 // =============================================================================
 
@@ -228,157 +293,6 @@ class DealNotificationPrefs {
 }
 
 // =============================================================================
-// DATOS DE EJEMPLO — TODO(backend): Reemplazar por DealsService.fetchDeals()
+// DATOS ELIMINADOS (Ahora se usa la API real en DealsScreen)
 // =============================================================================
-
-final List<GameDeal> sampleDeals = [
-  // Gratuitos
-  GameDeal(gameId: '3', gameTitle: 'League of Legends',
-    gameCover: 'https://images.unsplash.com/photo-1652318970273-acc95af4c6e1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.epic, originalPrice: 0, salePrice: 0,
-    discountPercent: 100, isFree: true, genre: 'MOBA', playerMode: PlayerMode.multi),
-  GameDeal(gameId: '4', gameTitle: 'Rocket League',
-    gameCover: 'https://images.unsplash.com/photo-1600998837340-4887228e311f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.epic, originalPrice: 0, salePrice: 0,
-    discountPercent: 100, isFree: true, genre: 'Deporte', playerMode: PlayerMode.both),
-  GameDeal(gameId: '7', gameTitle: 'Fortnite',
-    gameCover: 'https://images.unsplash.com/photo-1589241062272-c0a000072dfa?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.epic, originalPrice: 0, salePrice: 0,
-    discountPercent: 100, isFree: true, expiresAt: DateTime(2026, 5, 1),
-    genre: 'Battle Royale', playerMode: PlayerMode.multi),
-  GameDeal(gameId: '8', gameTitle: 'Destiny 2',
-    gameCover: 'https://images.unsplash.com/photo-1640955011254-39734e60b16f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.steam, originalPrice: 0, salePrice: 0,
-    discountPercent: 100, isFree: true, genre: 'Shooter', playerMode: PlayerMode.both),
-
-  // Steam
-  GameDeal(gameId: '1', gameTitle: 'The Witcher 3: Wild Hunt',
-    gameCover: 'https://images.unsplash.com/photo-1596387451385-d5f211f6e7ab?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.steam, originalPrice: 29.99, salePrice: 8.99,
-    discountPercent: 70, isFree: false, expiresAt: DateTime(2026, 4, 30),
-    genre: 'RPG', playerMode: PlayerMode.solo),
-  GameDeal(gameId: '2', gameTitle: 'Cyberpunk 2077',
-    gameCover: 'https://images.unsplash.com/photo-1642345843526-6279c8880a49?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.steam, originalPrice: 59.99, salePrice: 29.99,
-    discountPercent: 50, isFree: false, genre: 'RPG', playerMode: PlayerMode.solo),
-  GameDeal(gameId: '5', gameTitle: 'Starfield',
-    gameCover: 'https://images.unsplash.com/photo-1633355194356-1a2b1995cc62?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.steam, originalPrice: 69.99, salePrice: 34.99,
-    discountPercent: 50, isFree: false, genre: 'RPG', playerMode: PlayerMode.solo),
-  GameDeal(gameId: '9', gameTitle: 'Red Dead Redemption 2',
-    gameCover: 'https://images.unsplash.com/photo-1607853202273-797f1c22a38e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.steam, originalPrice: 59.99, salePrice: 17.99,
-    discountPercent: 70, isFree: false, genre: 'Acción', playerMode: PlayerMode.both),
-  GameDeal(gameId: '10', gameTitle: 'Elden Ring',
-    gameCover: 'https://images.unsplash.com/photo-1666888730264-8c7b85de6d40?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.steam, originalPrice: 59.99, salePrice: 35.99,
-    discountPercent: 40, isFree: false, genre: 'RPG', playerMode: PlayerMode.solo),
-  GameDeal(gameId: '11', gameTitle: 'Hades',
-    gameCover: 'https://images.unsplash.com/photo-1628277613967-6abca504d0ac?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.steam, originalPrice: 24.99, salePrice: 12.49,
-    discountPercent: 50, isFree: false, genre: 'Roguelike', playerMode: PlayerMode.solo),
-
-  // Epic
-  GameDeal(gameId: '12', gameTitle: 'Grand Theft Auto V',
-    gameCover: 'https://images.unsplash.com/photo-1493711662062-fa541adb3fc8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.epic, originalPrice: 29.99, salePrice: 14.99,
-    discountPercent: 50, isFree: false, genre: 'Acción', playerMode: PlayerMode.both),
-  GameDeal(gameId: '13', gameTitle: 'Control',
-    gameCover: 'https://images.unsplash.com/photo-1551103782-8ab07afd45c1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.epic, originalPrice: 39.99, salePrice: 9.99,
-    discountPercent: 75, isFree: false, genre: 'Acción', playerMode: PlayerMode.solo),
-  GameDeal(gameId: '14', gameTitle: 'Alan Wake 2',
-    gameCover: 'https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.epic, originalPrice: 49.99, salePrice: 24.99,
-    discountPercent: 50, isFree: false, genre: 'Terror', playerMode: PlayerMode.solo),
-
-  // PlayStation
-  GameDeal(gameId: '6', gameTitle: 'Horizon Zero Dawn',
-    gameCover: 'https://images.unsplash.com/photo-1654424931721-01f8487cf5f1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.psStore, originalPrice: 19.99, salePrice: 4.99,
-    discountPercent: 75, isFree: false, genre: 'Acción', playerMode: PlayerMode.solo),
-  GameDeal(gameId: '15', gameTitle: 'God of War Ragnarök',
-    gameCover: 'https://images.unsplash.com/photo-1674901001180-f56e65f23997?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.psStore, originalPrice: 79.99, salePrice: 47.99,
-    discountPercent: 40, isFree: false, genre: 'Acción', playerMode: PlayerMode.solo),
-  GameDeal(gameId: '16', gameTitle: 'Spider-Man: Miles Morales',
-    gameCover: 'https://images.unsplash.com/photo-1608889476518-738c9b1dcb40?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.psStore, originalPrice: 49.99, salePrice: 19.99,
-    discountPercent: 60, isFree: false, genre: 'Acción', playerMode: PlayerMode.solo),
-
-
-  // Instant Gaming
-  GameDeal(gameId: '19', gameTitle: 'Counter-Strike 2',
-    gameCover: 'https://images.unsplash.com/photo-1580327344181-c1163234e5a0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.instantGaming, originalPrice: 14.99, salePrice: 5.99,
-    discountPercent: 60, isFree: false, genre: 'Shooter', playerMode: PlayerMode.multi),
-  GameDeal(gameId: '20', gameTitle: 'FIFA 24',
-    gameCover: 'https://images.unsplash.com/photo-1553778263-73a83bab9b0c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    store: DealStore.instantGaming, originalPrice: 69.99, salePrice: 24.99,
-    discountPercent: 64, isFree: false, genre: 'Deporte', playerMode: PlayerMode.both),
-];
-
-// =============================================================================
-// MODEL: UpcomingGame — Próximos lanzamientos
-// =============================================================================
-
-class UpcomingGame {
-  final String id;
-  final String title;
-  final String? cover;
-  final DateTime releaseDate;
-  final String? genre;
-  final DealStore? store;
-
-  const UpcomingGame({
-    required this.id,
-    required this.title,
-    required this.releaseDate,
-    this.cover,
-    this.genre,
-    this.store,
-  });
-
-  String get releaseDateLabel {
-    const months = [
-      'ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN',
-      'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC',
-    ];
-    return '${releaseDate.day} ${months[releaseDate.month - 1]} ${releaseDate.year}';
-  }
-}
-
-/// TODO(backend): Reemplazar por UpcomingService.fetchUpcoming()
-final List<UpcomingGame> sampleUpcoming = [
-  UpcomingGame(
-    id: 'u1', title: 'Grand Theft Auto VI',
-    cover: 'https://images.unsplash.com/photo-1493711662062-fa541adb3fc8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    releaseDate: DateTime(2026, 5, 26), genre: 'Acción', store: DealStore.psStore,
-  ),
-  UpcomingGame(
-    id: 'u2', title: 'DOOM: The Dark Ages',
-    cover: 'https://images.unsplash.com/photo-1640955011254-39734e60b16f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    releaseDate: DateTime(2026, 5, 15), genre: 'Shooter', store: DealStore.steam,
-  ),
-  UpcomingGame(
-    id: 'u3', title: 'Ghost of Yōtei',
-    cover: 'https://images.unsplash.com/photo-1607853202273-797f1c22a38e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    releaseDate: DateTime(2026, 10, 1), genre: 'Acción', store: DealStore.psStore,
-  ),
-  UpcomingGame(
-    id: 'u4', title: 'Mafia: The Old Country',
-    cover: 'https://images.unsplash.com/photo-1596387451385-d5f211f6e7ab?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    releaseDate: DateTime(2026, 8, 8), genre: 'Acción', store: DealStore.steam,
-  ),
-  UpcomingGame(
-    id: 'u5', title: 'Monster Hunter Wilds DLC',
-    cover: 'https://images.unsplash.com/photo-1666888730264-8c7b85de6d40?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    releaseDate: DateTime(2026, 6, 20), genre: 'RPG', store: DealStore.steam,
-  ),
-  UpcomingGame(
-    id: 'u6', title: 'Marvel\'s Wolverine',
-    cover: 'https://images.unsplash.com/photo-1608889476518-738c9b1dcb40?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&w=400',
-    releaseDate: DateTime(2026, 12, 1), genre: 'Acción', store: DealStore.psStore,
-  ),
-];
 

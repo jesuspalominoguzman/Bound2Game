@@ -1,12 +1,11 @@
 // =============================================================================
-// deals_screen.dart — Bound2Game Flutter (Estética Premium v2)
+// deals_screen.dart — Bound2Game Flutter (API Real Integration)
 //
 // Orden de secciones:
-//   1. Hero Carousel  → Juegos Gratuitos + Top Deals (glassmorphism)
-//   2. Próximos Lanzamientos → timeline horizontal con wishlist toggle
-//   3. Explorar por Tienda  → grid 2 columnas → StoreDetailScreen
-//
-// Toda la navegación a juegos abre GameDetailScreen.
+//   1. Hero Carousel  → Juegos Gratuitos (Glassmorphism)
+//   2. Mejores Ofertas → Tarjetas calculadas horizontalmente
+//   3. Próximos Lanzamientos → Timeline horizontal
+//   4. Explorar por Tienda  → Grid
 // =============================================================================
 
 import 'package:flutter/material.dart';
@@ -31,7 +30,7 @@ const _green   = Color(0xFF39FF7E);
 const _yellow  = Color(0xFFFFB800);
 const _purple  = Color(0xFF9B6DFF);
 
-// ── Helpers: cruzar GameDeal → Game ─────────────────────────────────────────
+// ── Helpers: cruzar Deal → Game ─────────────────────────────────────────────
 
 Platform _storeToGamePlatform(DealStore store) {
   switch (store) {
@@ -42,21 +41,26 @@ Platform _storeToGamePlatform(DealStore store) {
   }
 }
 
-Game _dealToGame(GameDeal deal) => Game(
-  id: int.tryParse(deal.gameId) ?? 9999,
-  title: deal.gameTitle,
-  platform: _storeToGamePlatform(deal.store),
-  genre: deal.genre ?? 'Varios',
+Game _dealToGame(Deal deal) => Game(
+  id: int.tryParse(deal.id) ?? 9999,
+  title: deal.title,
+  platform: _storeToGamePlatform(deal.storeEnum),
+  genre: 'Varios',
   playtime: 0, status: GameStatus.unplayed,
-  cover: deal.gameCover ?? '',
+  cover: deal.thumbUrl,
   pcReq: PcReq.green, hasCosmetics: false,
-  price: deal.originalPrice, year: DateTime.now().year,
+  price: deal.normalPrice, year: DateTime.now().year,
 );
 
-Game _resolveGame(GameDeal deal) => sampleGames.firstWhere(
-  (g) => g.id.toString() == deal.gameId,
-  orElse: () => _dealToGame(deal),
-);
+Game _resolveGame(Deal deal) {
+  try {
+    return sampleGames.firstWhere(
+      (g) => g.id.toString() == deal.id || g.title.toLowerCase() == deal.title.toLowerCase(),
+    );
+  } catch (_) {
+    return _dealToGame(deal);
+  }
+}
 
 // =============================================================================
 // DealsScreen
@@ -72,23 +76,22 @@ class DealsScreen extends StatefulWidget {
 class _DealsScreenState extends State<DealsScreen> {
   final Set<String> _wishlist = {};
 
-  // Carga los juegos gratuitos del backend en lugar de filtrar sampleDeals
-  late final Future<List<GameDeal>> _freeGamesFuture = _loadFreeGames();
+  late Future<List<Deal>> _freeGamesFuture;
+  late Future<List<Deal>> _topDealsFuture;
+  late Future<List<Deal>> _upcomingGamesFuture;
 
-  Future<List<GameDeal>> _loadFreeGames() async {
-    final apiDeals = await ApiService.getFreeGames();
-    // Convertir ApiDeal → GameDeal para reusar _HeroCarousel
-    return apiDeals.map((d) => GameDeal.fromApiJson({
-      'gameId':          d.gameId,
-      'gameTitle':       d.gameTitle,
-      'gameCover':       d.gameCover,
-      'store':           d.store,
-      'originalPrice':   d.originalPrice,
-      'salePrice':       d.salePrice,
-      'discountPercent': d.discountPercent,
-      'isFree':          d.isFree,
-      'dealUrl':         d.dealUrl,
-    })).toList();
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+  }
+
+  void _loadData() {
+    setState(() {
+      _freeGamesFuture = ApiService.fetchFreeGames();
+      _topDealsFuture = ApiService.fetchDeals(limit: 10);
+      _upcomingGamesFuture = ApiService.fetchUpcomingGames();
+    });
   }
 
   void _toggleWishlist(String id) =>
@@ -96,65 +99,286 @@ class _DealsScreenState extends State<DealsScreen> {
           ? _wishlist.remove(id)
           : _wishlist.add(id));
 
-  void _openGame(GameDeal deal) => Navigator.of(context).push(
-    MaterialPageRoute(builder: (_) => GameDetailScreen(game: _resolveGame(deal))),
+  void _openGame(Deal deal) => Navigator.of(context).push(
+    MaterialPageRoute(builder: (_) => GameDetailScreen(baseGame: _resolveGame(deal))),
   );
+
+  Widget _buildLoading() {
+    return const SizedBox(
+      height: 200,
+      child: Center(
+        child: CircularProgressIndicator(color: _cyan, strokeWidth: 2),
+      ),
+    );
+  }
+
+  Widget _buildError(VoidCallback onRetry) {
+    return SizedBox(
+      height: 200,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline_rounded, color: _textSub, size: 32),
+            const SizedBox(height: 12),
+            Text('Error al cargar ofertas', style: GoogleFonts.outfit(color: _textSub)),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: onRetry,
+              style: TextButton.styleFrom(foregroundColor: _cyan),
+              child: const Text('Reintentar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          // ── 1. Hero Carousel (juegos gratuitos reales) ───────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 20),
-              child: FutureBuilder<List<GameDeal>>(
-                future: _freeGamesFuture,
+      body: RefreshIndicator(
+        onRefresh: () async => _loadData(),
+        color: _cyan,
+        backgroundColor: _bgCard,
+        child: CustomScrollView(
+          physics: const BouncingScrollPhysics(parent: AlwaysScrollableScrollPhysics()),
+          slivers: [
+            // ── 1. Hero Carousel (juegos gratuitos) ───────────────────────────
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.only(top: 20),
+                child: FutureBuilder<List<Deal>>(
+                  future: _freeGamesFuture,
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) return _buildLoading();
+                    if (snapshot.hasError) return _buildError(() => setState(() { _freeGamesFuture = ApiService.fetchFreeGames(); }));
+                    if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
+                    return _HeroCarousel(deals: snapshot.data!, onTap: _openGame);
+                  },
+                ),
+              ),
+            ),
+
+            // ── 2. Mejores Ofertas ──────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: FutureBuilder<List<Deal>>(
+                future: _topDealsFuture,
                 builder: (context, snapshot) {
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const SizedBox(
-                      height: 260,
-                      child: Center(
-                        child: CircularProgressIndicator(color: _green, strokeWidth: 2),
-                      ),
-                    );
-                  }
-                  if (snapshot.hasError || !snapshot.hasData || snapshot.data!.isEmpty) {
-                    // Fallback silencioso: muestra los deals locales si el backend falla
-                    final fallback = sampleDeals.where((d) => d.isFree).toList();
-                    if (fallback.isEmpty) return const SizedBox.shrink();
-                    return _HeroCarousel(deals: fallback, onTap: _openGame);
-                  }
-                  return _HeroCarousel(deals: snapshot.data!, onTap: _openGame);
+                  if (snapshot.connectionState == ConnectionState.waiting) return _buildLoading();
+                  if (snapshot.hasError) return _buildError(() => setState(() { _topDealsFuture = ApiService.fetchDeals(limit: 10); }));
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
+                  return _TopDealsSection(deals: snapshot.data!, onTap: _openGame);
                 },
               ),
             ),
-          ),
 
-          // ── 2. Timeline próximos lanzamientos ───────────────────────────────────
-          SliverToBoxAdapter(
-            child: _UpcomingSection(
-              wishlist: _wishlist,
-              onToggleWishlist: _toggleWishlist,
+            // ── 3. Timeline próximos lanzamientos ───────────────────────────
+            SliverToBoxAdapter(
+              child: FutureBuilder<List<Deal>>(
+                future: _upcomingGamesFuture,
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) return _buildLoading();
+                  if (snapshot.hasError) return _buildError(() => setState(() { _upcomingGamesFuture = ApiService.fetchUpcomingGames(); }));
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) return const SizedBox.shrink();
+                  return _UpcomingSection(
+                    deals: snapshot.data!,
+                    wishlist: _wishlist,
+                    onToggleWishlist: _toggleWishlist,
+                  );
+                },
+              ),
             ),
-          ),
 
-          // ── 3. Explorar por tienda ──────────────────────────────────────────────
-          SliverToBoxAdapter(
-            child: _StoreSection(),
-          ),
+            // ── 4. Explorar por tienda ────────────────────────────────────────
+            SliverToBoxAdapter(
+              child: _StoreSection(),
+            ),
 
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
-        ],
+            const SliverToBoxAdapter(child: SizedBox(height: 100)),
+          ],
+        ),
       ),
     );
   }
 }
 
-// (Se elimina el _GlassAppBar)
+// =============================================================================
+// _TopDealsSection — Lista horizontal de Deals con descuento real calculado
+// =============================================================================
+
+class _TopDealsSection extends StatelessWidget {
+  final List<Deal> deals;
+  final void Function(Deal) onTap;
+  
+  const _TopDealsSection({required this.deals, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    if (deals.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Header
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 24, 18, 12),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: _cyan.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.local_fire_department_rounded,
+                    size: 14, color: _cyan),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                'Mejores Ofertas',
+                style: GoogleFonts.outfit(
+                  fontSize: 15, fontWeight: FontWeight.w800,
+                  color: _textMain, letterSpacing: -0.2,
+                ),
+              ),
+            ],
+          ),
+        ),
+        // Horizontal list
+        SizedBox(
+          height: 190,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            itemCount: deals.length,
+            itemBuilder: (ctx, i) {
+              return DealCard(deal: deals[i], onTap: () => onTap(deals[i]));
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// =============================================================================
+// DealCard — Tarjeta de descuento
+// =============================================================================
+
+class DealCard extends StatelessWidget {
+  const DealCard({super.key, required this.deal, required this.onTap});
+  final Deal deal;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final cfg = deal.storeEnum.config;
+    final discount = deal.calculatedDiscount;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 140,
+        margin: const EdgeInsets.only(right: 10),
+        decoration: BoxDecoration(
+          color: _bgCard,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: _border),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Portada
+            Stack(
+              children: [
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
+                  child: SizedBox(
+                    height: 85, width: double.infinity,
+                    child: deal.thumbUrl.isNotEmpty
+                        ? Image.network(deal.thumbUrl, fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Container(color: _bgCard2))
+                        : Container(color: _bgCard2),
+                  ),
+                ),
+                if (discount > 0)
+                  Positioned(
+                    top: 6, right: 6,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: _green,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text('-$discount%',
+                          style: const TextStyle(
+                            fontSize: 10, fontWeight: FontWeight.w900,
+                            color: Colors.black,
+                          )),
+                    ),
+                  ),
+              ],
+            ),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Tienda
+                    Row(
+                      children: [
+                        Icon(cfg.icon, size: 10, color: cfg.color),
+                        const SizedBox(width: 4),
+                        Expanded(
+                          child: Text(cfg.name,
+                              style: TextStyle(
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w700,
+                                  color: cfg.color),
+                              overflow: TextOverflow.ellipsis),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    // Título
+                    Text(deal.title,
+                        style: GoogleFonts.outfit(
+                          fontSize: 12, fontWeight: FontWeight.w700,
+                          color: _textMain, height: 1.1,
+                        ),
+                        maxLines: 2, overflow: TextOverflow.ellipsis),
+                    const Spacer(),
+                    // Precios
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (discount > 0)
+                          Text('${deal.normalPrice.toStringAsFixed(2)}€',
+                              style: const TextStyle(
+                                fontSize: 10, color: _textSub,
+                                decoration: TextDecoration.lineThrough,
+                              )),
+                        if (discount > 0) const SizedBox(width: 4),
+                        Text(deal.salePrice == 0 ? 'GRATIS' : '${deal.salePrice.toStringAsFixed(2)}€',
+                            style: GoogleFonts.outfit(
+                              fontSize: 14, fontWeight: FontWeight.w800,
+                              color: deal.salePrice == 0 ? _green : _textMain,
+                            )),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 // =============================================================================
 // _HeroCarousel — PageView Animado (Cover Flow)
@@ -166,8 +390,8 @@ class _HeroCarousel extends StatefulWidget {
     required this.onTap,
   });
 
-  final List<GameDeal> deals;
-  final void Function(GameDeal) onTap;
+  final List<Deal> deals;
+  final void Function(Deal) onTap;
 
   @override
   State<_HeroCarousel> createState() => _HeroCarouselState();
@@ -254,12 +478,12 @@ class _HeroCarouselState extends State<_HeroCarousel> {
 
 class _HeroCard extends StatelessWidget {
   const _HeroCard({required this.deal, required this.onTap});
-  final GameDeal deal;
+  final Deal deal;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final cfg = deal.store.config;
+    final cfg = deal.storeEnum.config;
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -280,9 +504,9 @@ class _HeroCard extends StatelessWidget {
             fit: StackFit.expand,
             children: [
               // Portada de fondo
-              deal.gameCover != null
+              deal.thumbUrl.isNotEmpty
                   ? Image.network(
-                      deal.gameCover!,
+                      deal.thumbUrl,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) =>
                           Container(color: _bgCard2),
@@ -314,7 +538,7 @@ class _HeroCard extends StatelessWidget {
                 child: Padding(
                   padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       // Tienda
@@ -333,7 +557,7 @@ class _HeroCard extends StatelessWidget {
 
                       // Título
                       Text(
-                        deal.gameTitle,
+                        deal.title,
                         style: GoogleFonts.outfit(
                           fontSize: 22, fontWeight: FontWeight.w900,
                           color: Colors.white, letterSpacing: -0.5,
@@ -345,14 +569,15 @@ class _HeroCard extends StatelessWidget {
                       const SizedBox(height: 6),
 
                       // Precio original tachado (muy sutil)
-                      Text(
-                        deal.originalPriceLabel,
-                        style: const TextStyle(
-                          fontSize: 13, color: Color(0xFF888888),
-                          decoration: TextDecoration.lineThrough,
-                          fontWeight: FontWeight.w500,
+                      if (deal.normalPrice > 0)
+                        Text(
+                          '${deal.normalPrice.toStringAsFixed(2)} €',
+                          style: const TextStyle(
+                            fontSize: 13, color: Color(0xFF888888),
+                            decoration: TextDecoration.lineThrough,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
-                      ),
                       const SizedBox(height: 16),
 
                       // Botón RECLAMAR
@@ -398,12 +623,15 @@ class _HeroCard extends StatelessWidget {
 // =============================================================================
 
 class _UpcomingSection extends StatelessWidget {
-  const _UpcomingSection({required this.wishlist, required this.onToggleWishlist});
+  const _UpcomingSection({required this.deals, required this.wishlist, required this.onToggleWishlist});
+  final List<Deal> deals;
   final Set<String> wishlist;
   final void Function(String) onToggleWishlist;
 
   @override
   Widget build(BuildContext context) {
+    if (deals.isEmpty) return const SizedBox.shrink();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -447,14 +675,14 @@ class _UpcomingSection extends StatelessWidget {
             scrollDirection: Axis.horizontal,
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            itemCount: sampleUpcoming.length,
+            itemCount: deals.length,
             itemBuilder: (ctx, i) {
-              final game = sampleUpcoming[i];
-              final inWishlist = wishlist.contains(game.id);
+              final deal = deals[i];
+              final inWishlist = wishlist.contains(deal.id);
               return _UpcomingCard(
-                game: game,
+                deal: deal,
                 inWishlist: inWishlist,
-                onToggle: () => onToggleWishlist(game.id),
+                onToggle: () => onToggleWishlist(deal.id),
               );
             },
           ),
@@ -466,19 +694,14 @@ class _UpcomingSection extends StatelessWidget {
 
 class _UpcomingCard extends StatelessWidget {
   const _UpcomingCard({
-    required this.game, required this.inWishlist, required this.onToggle,
+    required this.deal, required this.inWishlist, required this.onToggle,
   });
-  final UpcomingGame game;
+  final Deal deal;
   final bool inWishlist;
   final VoidCallback onToggle;
 
   @override
   Widget build(BuildContext context) {
-    final daysLeft = game.releaseDate.difference(DateTime.now()).inDays;
-    final daysLabel = daysLeft <= 0
-        ? '¡Ya disponible!'
-        : daysLeft == 1 ? 'Mañana' : 'En $daysLeft días';
-
     return Container(
       width: 148,
       margin: const EdgeInsets.only(right: 10),
@@ -505,8 +728,8 @@ class _UpcomingCard extends StatelessWidget {
             borderRadius: const BorderRadius.vertical(top: Radius.circular(14)),
             child: SizedBox(
               height: 105, width: double.infinity,
-              child: game.cover != null
-                  ? Image.network(game.cover!, fit: BoxFit.cover,
+              child: deal.thumbUrl.isNotEmpty
+                  ? Image.network(deal.thumbUrl, fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) =>
                           Container(color: _bgCard2))
                   : Container(color: _bgCard2),
@@ -519,7 +742,7 @@ class _UpcomingCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   // Título
-                  Text(game.title,
+                  Text(deal.title,
                       style: GoogleFonts.outfit(
                         fontSize: 11, fontWeight: FontWeight.w700,
                         color: _textMain,
@@ -527,25 +750,20 @@ class _UpcomingCard extends StatelessWidget {
                       maxLines: 2, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 3),
 
-                  // Fecha + countdown
+                  // Fecha genérica (ya que la API no manda Date clara)
                   Row(
-                    children: [
-                      const Icon(Icons.calendar_today_rounded,
+                    children: const [
+                      Icon(Icons.calendar_today_rounded,
                           size: 9, color: _textMuted),
-                      const SizedBox(width: 3),
+                      SizedBox(width: 3),
                       Expanded(
-                        child: Text(game.releaseDateLabel,
-                            style: const TextStyle(
+                        child: Text('Próximamente',
+                            style: TextStyle(
                                 fontSize: 9, color: _textMuted),
                             overflow: TextOverflow.ellipsis),
                       ),
                     ],
                   ),
-                  Text(daysLabel,
-                      style: TextStyle(
-                        fontSize: 9, fontWeight: FontWeight.w700,
-                        color: daysLeft <= 7 ? _yellow : _textSub,
-                      )),
                   const Spacer(),
 
                   // Botón lista de deseos
@@ -634,7 +852,7 @@ class _StoreSection extends StatelessWidget {
           ),
         ),
 
-        // Grid
+        // Grid (Estático ahora que no dependemos de sampleDeals)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12),
           child: GridView.builder(
@@ -649,10 +867,8 @@ class _StoreSection extends StatelessWidget {
             ),
             itemBuilder: (ctx, i) {
               final store = DealStore.values[i];
-              final count = sampleDeals.where((d) => d.store == store).length;
               return _StoreCard(
                 store: store,
-                dealCount: count,
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
                     builder: (_) => StoreDetailScreen(store: store),
@@ -669,10 +885,9 @@ class _StoreSection extends StatelessWidget {
 
 class _StoreCard extends StatelessWidget {
   const _StoreCard({
-    required this.store, required this.dealCount, required this.onTap,
+    required this.store, required this.onTap,
   });
   final DealStore store;
-  final int dealCount;
   final VoidCallback onTap;
 
   @override
@@ -720,13 +935,11 @@ class _StoreCard extends StatelessWidget {
                           color: cfg.color,
                         ),
                         maxLines: 1, overflow: TextOverflow.ellipsis),
-                    Text(
-                      dealCount > 0
-                          ? '$dealCount oferta${dealCount != 1 ? "s" : ""}'
-                          : 'Sin ofertas',
+                    const Text(
+                      'Explorar',
                       style: TextStyle(
                         fontSize: 9,
-                        color: dealCount > 0 ? _textSub : _textMuted,
+                        color: _textSub,
                       ),
                     ),
                   ],

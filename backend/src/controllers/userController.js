@@ -126,8 +126,95 @@ const getProfile = async (req, res) => {
     }
 };
 
+/**
+ * Actualizar los componentes de PC del usuario
+ */
+const updatePcComponents = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { cpu, gpu, ram, storage } = req.body;
+
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        // Asegurarse de que existe el objeto
+        if (!user.pcComponents) {
+            user.pcComponents = {};
+        }
+
+        // Actualizar campos si se envían en el body
+        if (cpu !== undefined) user.pcComponents.cpu = cpu;
+        if (gpu !== undefined) user.pcComponents.gpu = gpu;
+        if (ram !== undefined) user.pcComponents.ram = Number(ram);
+        if (storage !== undefined) user.pcComponents.storage = String(storage);
+
+        await user.save();
+
+        return res.status(200).json({
+            message: 'Componentes de PC actualizados con éxito',
+            pcComponents: user.pcComponents
+        });
+    } catch (error) {
+        console.error('Error en updatePcComponents:', error);
+        return res.status(500).json({ error: 'Error interno al actualizar los componentes de PC' });
+    }
+};
+
+/**
+ * Obtener la lista de amigos del usuario autenticado
+ */
+const getUserFriends = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const user = await User.findById(userId).populate('friends', 'username avatarUrl karma status');
+        
+        if (!user) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        return res.status(200).json({
+            message: 'Amigos recuperados con éxito',
+            friends: user.friends
+        });
+    } catch (error) {
+        console.error('Error en getUserFriends:', error);
+        return res.status(500).json({ error: 'Error interno al recuperar amigos' });
+    }
+};
+
+/**
+ * Buscar usuarios por nombre de usuario
+ */
+const searchUsers = async (req, res) => {
+    try {
+        const { q } = req.query;
+        if (!q) {
+            return res.status(400).json({ error: 'Debes proporcionar un término de búsqueda' });
+        }
+
+        // Buscar usuarios ignorando mayúsculas/minúsculas usando expresión regular
+        const users = await User.find({ username: { $regex: q, $options: 'i' } })
+                                .select('username avatarUrl karma bio')
+                                .limit(20);
+
+        return res.status(200).json({
+            message: 'Búsqueda exitosa',
+            users
+        });
+    } catch (error) {
+        console.error('Error en searchUsers:', error);
+        return res.status(500).json({ error: 'Error interno al buscar usuarios' });
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
-    getProfile
+    getProfile,
+    updatePcComponents,
+    getUserFriends,
+    searchUsers
 };

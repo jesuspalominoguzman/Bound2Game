@@ -23,6 +23,8 @@ import 'dart:io' show Platform;
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'auth_service.dart';
+import '../models/deal_model.dart';
+import '../models/user_model.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MODELOS DE RESPUESTA DEL BACKEND
@@ -48,6 +50,7 @@ class ApiGame {
   final String? personalNote;
   final String? platform;
   final DateTime? addedAt;
+  final double? rentability;
 
   const ApiGame({
     required this.id,
@@ -65,35 +68,38 @@ class ApiGame {
     this.personalNote,
     this.platform,
     this.addedAt,
+    this.rentability,
   });
 
   factory ApiGame.fromJson(Map<String, dynamic> json) {
-    // Soporte para respuesta directa de GameCache o entrada de biblioteca (con .game)
-    final gameData = json['game'] as Map<String, dynamic>? ?? json;
+    // Si viene de UserLibrary poblado, los datos pueden estar en gameDetails o gameId
+    final gameData = json['gameId'] as Map<String, dynamic>? ?? json['game'] as Map<String, dynamic>? ?? json;
+    final gameDetails = json['gameDetails'] as Map<String, dynamic>?;
     final hltb     = gameData['hltb'] as Map<String, dynamic>?;
 
-    final steamId  = gameData['steamAppID']?.toString();
-
-    // Construir URL de portada: preferimos el campo imageUrl del backend,
-    // si está vacío usamos la CDN de Steam
-    String cover = (gameData['imageUrl'] as String?) ?? '';
+    final steamId  = gameDetails?['id']?.toString() ?? gameData['steamAppID']?.toString();
+    final title    = gameDetails?['name']?.toString() ?? gameData['title']?.toString() ?? 'Sin título';
+    
+    // Construir URL de portada
+    String cover = gameDetails?['image']?.toString() ?? gameData['imageUrl']?.toString() ?? '';
     if (cover.isEmpty && steamId != null && steamId.isNotEmpty) {
       cover = 'https://cdn.akamai.steamstatic.com/steam/apps/$steamId/header.jpg';
     }
 
     return ApiGame(
-      id:               gameData['_id']?.toString()        ?? '',
-      title:            gameData['title']?.toString()       ?? 'Sin título',
+      id:               json['_id']?.toString() ?? gameData['_id']?.toString() ?? '',
+      title:            title,
       steamAppID:       steamId,
       imageUrl:         cover,
-      hltbMainStory:    _toDouble(hltb?['mainStory']),
+      hltbMainStory:    _toDouble(gameDetails?['mainTime'] ?? hltb?['mainStory']),
       hltbCompletionist:_toDouble(hltb?['completionist']),
       retailPrice:      gameData['retailPrice']?.toString(),
-      currentPrice:     gameData['currentPrice']?.toString(),
+      currentPrice:     gameDetails?['price']?.toString() ?? gameData['currentPrice']?.toString(),
       cheapestStore:    gameData['cheapestStore']?.toString(),
       lowestPriceEver:  gameData['lowestPriceEver']?.toString(),
-      // Campos de la entrada de biblioteca (json directo, no gameData)
-      entryId:          json['entryId']?.toString(),
+      rentability:      _toDouble(gameDetails?['rentability']),
+      // Campos de la entrada de biblioteca
+      entryId:          json['_id']?.toString() ?? json['entryId']?.toString(),
       status:           json['status']?.toString(),
       personalNote:     json['personalNote']?.toString(),
       platform:         json['platform']?.toString(),
@@ -306,6 +312,72 @@ class ApiService {
     _parse(r); // lanza ApiException si falla
   }
 
+  /// PUT /api/users/me/pc-components
+  static Future<void> updatePcComponents({
+    String? cpu,
+    String? gpu,
+    double? ram,
+    String? storage,
+  }) async {
+    final body = <String, dynamic>{};
+    if (cpu != null) body['cpu'] = cpu;
+    if (gpu != null) body['gpu'] = gpu;
+    if (ram != null) body['ram'] = ram;
+    if (storage != null) body['storage'] = storage;
+
+    final r = await http
+        .put(
+          Uri.parse('$baseUrl/api/users/me/pc-components'),
+          headers: await _headers(withAuth: true),
+          body: jsonEncode(body),
+        )
+        .timeout(_timeout);
+
+    final data = _parse(r);
+    
+    final session = await AuthService.loadSession();
+    if (session != null && data['pcComponents'] != null) {
+      final updatedUser = AuthUser(
+        id: session.user.id,
+        username: session.user.username,
+        email: session.user.email,
+        avatarUrl: session.user.avatarUrl,
+        reputation: session.user.reputation,
+        pcComponents: data['pcComponents'] as Map<String, dynamic>,
+      );
+      await AuthService.saveSession(session.token, updatedUser);
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────
+  // USUARIOS
+  // ───────────────────────────────────────────────────────────────────────────
+
+  /// Obtener perfil propio
+  static Future<User> fetchMyProfile() async {
+    try {
+      final res = await http.get(Uri.parse('$baseUrl/api/users/me'), headers: await _headers(withAuth: true));
+      final data = _parse(res);
+      return User.fromJson(data['user']);
+    } catch (e) {
+      print('[ApiService] Error fetching my profile: $e');
+      rethrow;
+    }
+  }
+
+  /// Obtener lista de amigos
+  static Future<List<User>> fetchFriends() async {
+    try {
+      final res = await http.get(Uri.parse('$baseUrl/api/users/friends'), headers: await _headers(withAuth: true));
+      final data = _parse(res);
+      final friendsList = data['friends'] as List? ?? [];
+      return friendsList.map((j) => User.fromJson(j as Map<String, dynamic>)).toList();
+    } catch (e) {
+      print('[ApiService] Error fetching friends: $e');
+      rethrow;
+    }
+  }
+
   // ══════════════════════════════════════════════════════════════════════════
   // BIBLIOTECA DEL USUARIO
   // ══════════════════════════════════════════════════════════════════════════
@@ -382,6 +454,28 @@ class ApiService {
     _parse(r);
   }
 
+  /// GET /api/users/:userId/library/:entryId
+  static Future<Map<String, dynamic>> getGameDetails({
+    required String userId,
+    required String entryId,
+  }) async {
+    final r = await http
+        .get(
+          Uri.parse('$baseUrl/api/users/$userId/library/$entryId'),
+          headers: await _headers(withAuth: true),
+        )
+        .timeout(_timeout);
+
+    final data = _parse(r);
+    final entry = ApiGame.fromJson(data['entry'] as Map<String, dynamic>);
+    final compatibility = data['compatibility']?.toString();
+    
+    return {
+      'game': entry,
+      'compatibility': compatibility,
+    };
+  }
+
   /// DELETE /api/users/:userId/library/:entryId
   static Future<void> removeFromLibrary({
     required String userId,
@@ -417,8 +511,8 @@ class ApiService {
   // DEALS
   // ══════════════════════════════════════════════════════════════════════════
 
-  /// GET /api/games/deals?limit=20
-  static Future<List<ApiDeal>> getDeals({int limit = 20}) async {
+  /// GET /api/games/deals
+  static Future<List<Deal>> fetchDeals({int limit = 20}) async {
     final uri = Uri.parse('$baseUrl/api/games/deals')
         .replace(queryParameters: {'limit': limit.toString()});
 
@@ -429,12 +523,12 @@ class ApiService {
     final data  = _parse(r);
     final deals = (data['deals'] as List?) ?? [];
     return deals
-        .map((d) => ApiDeal.fromJson(d as Map<String, dynamic>))
+        .map((d) => Deal.fromJson(d as Map<String, dynamic>))
         .toList();
   }
 
   /// GET /api/games/free
-  static Future<List<ApiDeal>> getFreeGames() async {
+  static Future<List<Deal>> fetchFreeGames() async {
     final r = await http
         .get(
           Uri.parse('$baseUrl/api/games/free'),
@@ -445,7 +539,23 @@ class ApiService {
     final data  = _parse(r);
     final games = (data['freeGames'] as List?) ?? [];
     return games
-        .map((g) => ApiDeal.fromJson(g as Map<String, dynamic>))
+        .map((g) => Deal.fromJson(g as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// GET /api/games/upcoming
+  static Future<List<Deal>> fetchUpcomingGames() async {
+    final r = await http
+        .get(
+          Uri.parse('$baseUrl/api/games/upcoming'),
+          headers: await _headers(),
+        )
+        .timeout(_timeout);
+
+    final data  = _parse(r);
+    final games = (data['upcomingGames'] as List?) ?? [];
+    return games
+        .map((g) => Deal.fromJson(g as Map<String, dynamic>))
         .toList();
   }
 }
