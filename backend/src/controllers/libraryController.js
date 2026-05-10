@@ -1,3 +1,4 @@
+const mongoose    = require('mongoose');
 const UserLibrary = require('../models/UserLibrary');
 const GameCache   = require('../models/GameCache');
 const gameService = require('../services/gameService');
@@ -123,6 +124,15 @@ const getGameDetails = async (req, res) => {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
 
+        // Parche: Si es un juego antiguo en la biblioteca que tiene SteamID pero no requisitos HTML, actualizamos
+        if (entry.gameId && entry.gameId.steamAppID && (!entry.gameId.pcRequirements || entry.gameId.pcRequirements === 'No disponibles')) {
+            const steamReq = await gameService.getSteamRequirements(entry.gameId.steamAppID);
+            if (steamReq) {
+                entry.gameId.pcRequirements = steamReq;
+                await entry.gameId.save();
+            }
+        }
+
         const requirements = entry.gameId ? entry.gameId.requirements : null;
         const compatibility = gameService.compareRequirements(user.pcComponents, requirements);
 
@@ -174,6 +184,10 @@ const updateEntry = async (req, res) => {
 const removeGame = async (req, res) => {
     try {
         const { userId, entryId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(entryId)) {
+            return res.status(400).json({ error: 'ID de entrada inválido' });
+        }
 
         const deleted = await UserLibrary.findOneAndDelete({ _id: entryId, userId });
 

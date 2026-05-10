@@ -51,6 +51,7 @@ class ApiGame {
   final String? platform;
   final DateTime? addedAt;
   final double? rentability;
+  final String? pcRequirements; // Nuevo campo para HTML de requisitos
 
   const ApiGame({
     required this.id,
@@ -69,6 +70,7 @@ class ApiGame {
     this.platform,
     this.addedAt,
     this.rentability,
+    this.pcRequirements,
   });
 
   factory ApiGame.fromJson(Map<String, dynamic> json) {
@@ -98,6 +100,7 @@ class ApiGame {
       cheapestStore:    gameData['cheapestStore']?.toString(),
       lowestPriceEver:  gameData['lowestPriceEver']?.toString(),
       rentability:      _toDouble(gameDetails?['rentability']),
+      pcRequirements:   gameData['pcRequirements']?.toString() ?? gameData['requirements']?['minimum']?.toString(),
       // Campos de la entrada de biblioteca
       entryId:          json['_id']?.toString() ?? json['entryId']?.toString(),
       status:           json['status']?.toString(),

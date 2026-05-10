@@ -10,9 +10,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/user_model.dart';
+import '../models/game_model.dart' as gm;
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import 'chat_screen.dart';
+import 'game_detail_screen.dart';
 
 // ── Paleta local (identidad visual definitiva) ────────────────────────────────
 const _kBgCard   = Color(0xFF1A1A1A);
@@ -38,10 +40,10 @@ class DashboardScreen extends StatefulWidget {
   final ValueChanged<int>? onNavigate;
 
   @override
-  State<DashboardScreen> createState() => _DashboardScreenState();
+  State<DashboardScreen> createState() => DashboardScreenState();
 }
 
-class _DashboardScreenState extends State<DashboardScreen> {
+class DashboardScreenState extends State<DashboardScreen> {
   // Datos del usuario autenticado (cargados al init)
   String? _userId;
   Future<_DashboardData>? _future;
@@ -75,9 +77,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _retry() {
+  void reloadDashboard() {
+    if (!mounted) return;
     if (_userId != null) {
-      setState(() => _future = _fetchDashboard(_userId!));
+      setState(() {
+        _future = _fetchDashboard(_userId!);
+      });
+    } else {
+      _loadUser();
     }
   }
 
@@ -100,7 +107,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           );
         }
         if (snapshot.hasError) {
-          return _ErrorState(error: snapshot.error.toString(), onRetry: _retry);
+          return _ErrorState(error: snapshot.error.toString(), onRetry: reloadDashboard);
         }
 
         final data        = snapshot.data!;
@@ -334,65 +341,110 @@ class _ApiGameCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        decoration: BoxDecoration(color: _kBgCard, border: Border.all(color: _kBorder)),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            Image.network(
-              game.coverUrl,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => Container(
-                color: _kBgCard,
-                child: const Icon(Icons.sports_esports_rounded, color: _kBorder, size: 40),
+    // Convertir strings del backend a enums del modelo
+    final gm.Platform platform = () {
+      switch ((game.platform ?? '').toLowerCase()) {
+        case 'steam': return gm.Platform.steam;
+        case 'epic':  return gm.Platform.epic;
+        default:      return gm.Platform.steam;
+      }
+    }();
+
+    final gm.GameStatus status = () {
+      switch ((game.status ?? '').toLowerCase()) {
+        case 'playing':   return gm.GameStatus.playing;
+        case 'completed': return gm.GameStatus.completed;
+        case 'abandoned': return gm.GameStatus.abandoned;
+        default:          return gm.GameStatus.unplayed;
+      }
+    }();
+
+    return GestureDetector(
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => GameDetailScreen(
+              baseGame: gm.Game(
+                id: int.tryParse(game.id) ?? 0,
+                title: game.title,
+                platform: platform,
+                genre: 'Varios',
+                playtime: game.hltbMainStory?.round() ?? 0,
+                status: status,
+                cover: game.coverUrl,
+                pcReq: gm.PcReq.yellow,
+                hasCosmetics: false,
+                price: game.currentPrice != null ? double.tryParse(game.currentPrice!) ?? 0 : 0,
+                year: game.addedAt?.year ?? DateTime.now().year,
+                pcRequirements: game.pcRequirements,
               ),
-              loadingBuilder: (_, child, progress) {
-                if (progress == null) return child;
-                return Container(
-                  color: _kBgCard,
-                  child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: _kYellow)),
-                );
-              },
+              entryId: game.entryId,
             ),
-            Positioned(
-              bottom: 0, left: 0, right: 0,
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.bottomCenter, end: Alignment.topCenter,
-                    colors: [Color(0xE6000000), Color(0x4D000000), Colors.transparent],
-                    stops: [0.0, 0.6, 1.0],
+          ),
+        ).then((_) {
+          context.findAncestorStateOfType<DashboardScreenState>()?.reloadDashboard();
+        });
+      },
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          decoration: BoxDecoration(color: _kBgCard, border: Border.all(color: _kBorder)),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.network(
+                game.coverUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => Container(
+                  color: _kBgCard,
+                  child: const Icon(Icons.sports_esports_rounded, color: _kBorder, size: 40),
+                ),
+                loadingBuilder: (_, child, progress) {
+                  if (progress == null) return child;
+                  return Container(
+                    color: _kBgCard,
+                    child: const Center(child: CircularProgressIndicator(strokeWidth: 2, color: _kYellow)),
+                  );
+                },
+              ),
+              Positioned(
+                bottom: 0, left: 0, right: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.bottomCenter, end: Alignment.topCenter,
+                      colors: [Color(0xE6000000), Color(0x4D000000), Colors.transparent],
+                      stops: [0.0, 0.6, 1.0],
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(game.title,
+                          style: GoogleFonts.inter(fontSize: 11, color: _kWhite,
+                              fontWeight: FontWeight.w600, height: 1.3),
+                          maxLines: 2, overflow: TextOverflow.ellipsis),
+                      if (game.status != null) ...[
+                        const SizedBox(height: 3),
+                        _StatusBadge(status: game.status!),
+                      ],
+                      if (game.hltbMainStory != null) ...[
+                        const SizedBox(height: 3),
+                        Row(children: [
+                          const Icon(Icons.schedule_rounded, size: 9, color: _kMuted),
+                          const SizedBox(width: 2),
+                          Text('${game.hltbMainStory!.toStringAsFixed(0)}h',
+                              style: GoogleFonts.inter(fontSize: 9, color: _kMuted)),
+                        ]),
+                      ],
+                    ],
                   ),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(game.title,
-                        style: GoogleFonts.inter(fontSize: 11, color: _kWhite,
-                            fontWeight: FontWeight.w600, height: 1.3),
-                        maxLines: 2, overflow: TextOverflow.ellipsis),
-                    if (game.status != null) ...[
-                      const SizedBox(height: 3),
-                      _StatusBadge(status: game.status!),
-                    ],
-                    if (game.hltbMainStory != null) ...[
-                      const SizedBox(height: 3),
-                      Row(children: [
-                        const Icon(Icons.schedule_rounded, size: 9, color: _kMuted),
-                        const SizedBox(width: 2),
-                        Text('${game.hltbMainStory!.toStringAsFixed(0)}h',
-                            style: GoogleFonts.inter(fontSize: 9, color: _kMuted)),
-                      ]),
-                    ],
-                  ],
-                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

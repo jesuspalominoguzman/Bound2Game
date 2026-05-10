@@ -4,6 +4,9 @@
 // =============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:flutter_html/flutter_html.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/game_model.dart';
 import '../models/deal_model.dart';
 import '../widgets/platform_badge.dart';
@@ -148,7 +151,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
             title: widget.baseGame.title,
             platform: widget.baseGame.platform,
             genre: widget.baseGame.genre,
-            playtime: widget.baseGame.playtime,
+            playtime: apiGame.hltbMainStory?.round() ?? widget.baseGame.playtime,
             status: widget.baseGame.status,
             cover: widget.baseGame.cover,
             pcReq: PcReq.fromString(compStatus),
@@ -161,6 +164,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
               completionist: apiGame.hltbCompletionist?.round(),
             ),
             pcSpecs: widget.baseGame.pcSpecs,
+            pcRequirements: apiGame.pcRequirements ?? widget.baseGame.pcRequirements,
           );
           _isLoading = false;
         });
@@ -334,7 +338,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
                   const SizedBox(height: 16),
 
                   // Módulo Requisitos PC
-                  if (game.pcSpecs != null || game.pcReq != PcReq.yellow) ...[
+                  if (game.pcSpecs != null || game.pcReq != PcReq.yellow || (game.pcRequirements != null && game.pcRequirements!.isNotEmpty && game.pcRequirements != 'No disponibles')) ...[
                     _PcReqModule(game: game),
                     const SizedBox(height: 16),
                   ],
@@ -634,9 +638,40 @@ class _PcReqModule extends StatelessWidget {
                   fontSize: 12, color: cfg.color, fontWeight: FontWeight.w700),
             ),
           ),
-          // Barras de specs
-          // TODO(backend): Datos reales de UserPcService.getSpecs()
-          if (specs != null) ...[
+          // Requisitos HTML
+          if (game.pcRequirements != null && game.pcRequirements!.isNotEmpty && game.pcRequirements != 'No disponibles')
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: _bg.withValues(alpha: 0.5),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: _border),
+              ),
+              child: Html(
+                data: game.pcRequirements,
+                style: {
+                  "body": Style(
+                    color: _textSub,
+                    fontSize: FontSize(12),
+                    fontFamily: 'Inter',
+                    margin: Margins.zero,
+                  ),
+                  "strong": Style(
+                    color: _textMain,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  "li": Style(
+                    margin: Margins.only(bottom: 4),
+                  ),
+                  "ul": Style(
+                    margin: Margins.only(left: 12),
+                    padding: HtmlPaddings.zero,
+                  ),
+                },
+              ),
+            )
+          else if (specs != null) ...[
             _SpecBar(label: 'CPU', spec: specs.cpu),
             _SpecBar(label: 'GPU', spec: specs.gpu),
             _SpecBar(label: 'RAM', spec: specs.ram),

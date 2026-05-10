@@ -18,6 +18,7 @@ import '../widgets/advanced_filters_modal.dart';
 import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import 'game_detail_screen.dart';
+import 'main_layout.dart' show dashboardKey;
 import 'shake_selector_screen.dart';
 
 // ── Paleta del tema definitivo ─────────────────────────────────────────────────
@@ -37,10 +38,10 @@ class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
 
   @override
-  State<LibraryScreen> createState() => _LibraryScreenState();
+  State<LibraryScreen> createState() => LibraryScreenState();
 }
 
-class _LibraryScreenState extends State<LibraryScreen>
+class LibraryScreenState extends State<LibraryScreen>
     with SingleTickerProviderStateMixin {
 
   // ── Datos reales del backend ─────────────────────────────────────────────────
@@ -129,10 +130,10 @@ class _LibraryScreenState extends State<LibraryScreen>
     _searchFocus.addListener(
       () => setState(() => _isSearchFocused = _searchFocus.hasFocus),
     );
-    _loadLibrary();
+    reloadLibrary();
   }
 
-  Future<void> _loadLibrary() async {
+  Future<void> reloadLibrary() async {
     setState(() { _isLoading = true; _loadError = null; });
     try {
       final user = await AuthService.getCurrentUser();
@@ -209,7 +210,11 @@ class _LibraryScreenState extends State<LibraryScreen>
         ),
         transitionDuration: const Duration(milliseconds: 280),
       ),
-    );
+    ).then((_) {
+      reloadLibrary();
+      // También actualizamos el Dashboard por si se añadió/quitó un juego
+      dashboardKey.currentState?.reloadDashboard();
+    });
   }
 
   Future<void> _openFilters() async {
@@ -243,7 +248,7 @@ class _LibraryScreenState extends State<LibraryScreen>
         Text(_loadError!, style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFFAAAAAA)), textAlign: TextAlign.center),
         const SizedBox(height: 20),
         GestureDetector(
-          onTap: _loadLibrary,
+          onTap: reloadLibrary,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
             decoration: BoxDecoration(

@@ -84,38 +84,54 @@ const searchGame = async (req, res) => {
 
         if (cachedGame) {
             console.log(`⚡ Devolviendo '${cachedGame.title}' desde la caché de MongoDB`);
+            // Parche: Si es un juego antiguo en caché que tiene SteamID pero no requisitos, actualizamos
+            if (cachedGame.steamAppID && (!cachedGame.pcRequirements || cachedGame.pcRequirements === 'No disponibles')) {
+                const steamReq = await gameService.getSteamRequirements(cachedGame.steamAppID);
+                if (steamReq) {
+                    cachedGame.pcRequirements = steamReq;
+                    await cachedGame.save();
+                }
+            }
             return res.json(cachedGame);
         }
 
         console.log(`🌐 Buscando '${title}' en APIs externas...`);
 
-        // --- 2. CADENA DE BÚSQUEDA: CheapShark → Steam → OpenCritic ---
-        let gameData = await gameService.getCheapSharkData(title);
+        // --- 2. CADENA DE BÚSQUEDA: RAWG → CheapShark → Steam → OpenCritic ---
+        let baseData = await gameService.getRawgData(title);
+        
+        // Si RAWG devuelve algo, usamos ese nombre limpio para las demás tiendas
+        const searchTitle = baseData ? baseData.title : title;
+
+        let gameData = await gameService.getCheapSharkData(searchTitle);
 
         if (!gameData) {
-            console.log(`⚠️  CheapShark falló para '${title}', probando Steam...`);
-            gameData = await searchSteamFallback(title);
+            console.log(`⚠️  CheapShark falló para '${searchTitle}', probando Steam...`);
+            gameData = await searchSteamFallback(searchTitle);
         }
 
         if (!gameData) {
-            console.log(`⚠️  Steam también falló, probando OpenCritic (multi-plataforma)...`);
-            gameData = await searchOpenCriticFallback(title);
+            console.log(`⚠️  Steam falló para '${searchTitle}', probando OpenCritic...`);
+            gameData = await searchOpenCriticFallback(searchTitle);
         }
 
-        // Fallback 3: usar HLTB para validar que el juego existe, con datos mínimos
-        if (!gameData) {
-            console.log(`⚠️ falló, intentando HLTB como último recurso...`);
-            const hltbOnly = await gameService.getHowLongToBeatData(title);
-            if (hltbOnly && typeof hltbOnly.main === 'number') {
-                gameData = {
-                    title,
-                    steamAppID: null,
-                    imageUrl: '',
-                    currentPrice: '0',
-                    retailPrice: '0',
-                    cheapestStore: 'N/A',
-                    lowestPriceEver: '0',
-                };
+        // --- Combinar resultados ---
+        if (!gameData && baseData) {
+            // Solo se encontró en RAWG (ej. Smash Bros)
+            gameData = {
+                title: baseData.title,
+                steamAppID: null,
+                imageUrl: baseData.imageUrl,
+                currentPrice: '0',
+                retailPrice: '0',
+                cheapestStore: 'N/A',
+                lowestPriceEver: '0',
+            };
+        } else if (gameData && baseData) {
+            // Combinar ambos: RAWG tiene mejor título y fondo
+            gameData.title = baseData.title;
+            if (baseData.imageUrl) {
+                gameData.imageUrl = baseData.imageUrl;
             }
         }
 
@@ -128,7 +144,7 @@ const searchGame = async (req, res) => {
             pcRequirements = await gameService.getSteamRequirements(gameData.steamAppID);
         }
 
-        const playtimeData = await gameService.getHowLongToBeatData(title);
+        const playtimeData = await gameService.getHowLongToBeatData(gameData.title);
 
         // --- 3. CONSTRUIR EL OBJETO A GUARDAR ---
         const newGameData = {

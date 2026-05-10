@@ -19,6 +19,8 @@ services:
       # IMPORTANTE: Aquí la URL usa 'database' en lugar de 'localhost'
       - MONGO_URI=mongodb://database:27017/bound2game
       - PORT=3000
+      - JWT_SECRET=super_secret_key_for_bound2game_tfg
+      - RAWG_API_KEY=da05ec0e293449289384e0b583dc562b
     depends_on:
       - database
     volumes:

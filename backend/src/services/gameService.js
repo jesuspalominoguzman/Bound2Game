@@ -25,6 +25,40 @@ const getStoreName = async (storeID) => {
 };
 
 /**
+ * Consulta la API de RAWG para obtener información base del juego por título.
+ * @param {string} title - Título del juego
+ * @returns {Object|null} - Datos del juego desde RAWG o null
+ */
+const getRawgData = async (title) => {
+    try {
+        const apiKey = process.env.RAWG_API_KEY;
+        if (!apiKey) {
+            console.warn('RAWG_API_KEY no configurada. Saltando RAWG.');
+            return null;
+        }
+
+        const url = `https://api.rawg.io/api/games?search=${encodeURIComponent(title)}&key=${apiKey}&page_size=1`;
+        const response = await axios.get(url, { timeout: 8000 });
+        
+        if (!response.data || !response.data.results || response.data.results.length === 0) {
+            return null;
+        }
+
+        const bestMatch = response.data.results[0];
+
+        console.log(`✅ RAWG encontró: '${bestMatch.name}' para búsqueda '${title}'`);
+
+        return {
+            title: bestMatch.name,
+            imageUrl: bestMatch.background_image || '',
+        };
+    } catch (error) {
+        console.error('Error al consultar RAWG API:', error.message);
+        return null;
+    }
+};
+
+/**
  * Consulta la API de CheapShark para obtener el juego por título.
  * @param {string} title - Título del juego
  * @returns {Object|null} - Datos del juego desde CheapShark o null si no se encuentra
@@ -200,6 +234,7 @@ const compareRequirements = (userPcComponents, gameRequirements) => {
 };
 
 module.exports = {
+    getRawgData,
     getCheapSharkData,
     getSteamRequirements,
     getHowLongToBeatData,

@@ -48,18 +48,21 @@ class _NavItem {
 // DATOS DE NAVEGACIÓN
 // ─────────────────────────────────────────────────────────────────────────────
 
+final GlobalKey<LibraryScreenState> libraryKey = GlobalKey<LibraryScreenState>();
+final GlobalKey<DashboardScreenState> dashboardKey = GlobalKey<DashboardScreenState>();
+
 List<_NavItem> _buildNavItems(ValueChanged<int> onNavigate) => [
   _NavItem(
     label: 'Inicio',
     icon: Icons.dashboard_outlined,
     activeIcon: Icons.dashboard_rounded,
-    screen: DashboardScreen(onNavigate: onNavigate),
+    screen: DashboardScreen(key: dashboardKey, onNavigate: onNavigate),
   ),
-  const _NavItem(
+  _NavItem(
     label: 'Biblioteca',
     icon: Icons.menu_book_outlined,
     activeIcon: Icons.menu_book_rounded,
-    screen: LibraryScreen(),
+    screen: LibraryScreen(key: libraryKey),
   ),
   const _NavItem(
     label: 'Ofertas',
@@ -111,8 +114,26 @@ class _MainLayoutState extends State<MainLayout>
   }
 
   void _onTabSelected(int index) {
-    if (index == _selectedIndex) return;
+    // Si ya estamos en el mismo tab, igualmente recargamos el contenido
+    if (index == _selectedIndex) {
+      // Refrescar el tab activo al re-pulsar
+      if (index == 0) {
+        dashboardKey.currentState?.reloadDashboard();
+      }
+      if (index == 1) {
+        libraryKey.currentState?.reloadLibrary();
+      }
+      return;
+    }
+
     setState(() => _selectedIndex = index);
+
+    // Recargar al cambiar de pestaña
+    if (index == 0) {
+      dashboardKey.currentState?.reloadDashboard();
+    } else if (index == 1) {
+      libraryKey.currentState?.reloadLibrary();
+    }
   }
 
   String get _currentPageName => _navItems[_selectedIndex].label;
@@ -131,8 +152,14 @@ class _MainLayoutState extends State<MainLayout>
         // Lupa en amarillo #FFB800
         IconButton(
           icon: const Icon(Icons.search_rounded, color: _kYellow, size: 24),
-          onPressed: () {
-            showSearch(context: context, delegate: B2GSearchDelegate());
+          onPressed: () async {
+            await showSearch(context: context, delegate: B2GSearchDelegate());
+            // Si estábamos en la pestaña Biblioteca o Inicio, recargamos por si añadió/quitó juegos
+            if (_selectedIndex == 1) {
+              libraryKey.currentState?.reloadLibrary();
+            } else if (_selectedIndex == 0) {
+              dashboardKey.currentState?.reloadDashboard();
+            }
           },
         ),
         // Botón de ajustes en amarillo #FFB800

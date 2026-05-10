@@ -54,6 +54,7 @@ dependencies:
   # Buscador y selector de GIFs integrado con la API de Giphy.
   giphy_get: ^3.6.1+1
   flutter_dotenv: ^6.0.1
+  flutter_html: ^3.0.0
 
 dev_dependencies:
   flutter_test:

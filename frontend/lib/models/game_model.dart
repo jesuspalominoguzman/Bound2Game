@@ -212,6 +212,9 @@ class Game {
 
   /// Puntuación del juego (0.0–10.0).
   final double? rating;
+  
+  /// Requisitos de PC en formato HTML (viene de la API).
+  final String? pcRequirements;
 
   const Game({
     required this.id,
@@ -231,6 +234,7 @@ class Game {
     this.pcSpecs,
     this.rentability,
     this.rating,
+    this.pcRequirements,
   });
 }
 
