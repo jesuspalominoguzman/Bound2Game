@@ -124,8 +124,23 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
         );
       }).toList();
 
+      String? actualEntryId = widget.entryId;
+
       // 2. Fetch Game Details from Library if entryId exists
-      if (widget.entryId == null) {
+      if (actualEntryId == null) {
+        // Verificar si el juego ya está en la biblioteca
+        final library = await ApiService.getLibrary(user.id);
+        try {
+          final match = library.firstWhere((g) => g.title.toLowerCase() == widget.baseGame.title.toLowerCase());
+          actualEntryId = match.entryId;
+          _addedEntryId = actualEntryId;
+          _addedToLibraryLocal = true;
+        } catch (_) {
+          // No está en la biblioteca
+        }
+      }
+
+      if (actualEntryId == null) {
         if (mounted) {
           setState(() {
             _fullGame = widget.baseGame;
@@ -137,21 +152,27 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
 
       final details = await ApiService.getGameDetails(
         userId: user.id,
-        entryId: widget.entryId!,
+        entryId: actualEntryId,
       );
 
       final apiGame = details['game'] as ApiGame;
       final compStatus = details['compatibility'] as String?;
 
       if (mounted) {
+        // Si no hay steamAppID, el juego no es de PC aunque el campo diga 'Steam'
+        final effectivePlatform = (widget.baseGame.platform == Platform.steam &&
+                (apiGame.steamAppID == null || apiGame.steamAppID!.isEmpty))
+            ? Platform.integrated
+            : widget.baseGame.platform;
+
         setState(() {
           _fullGame = Game(
             id: widget.baseGame.id,
             entryId: widget.entryId,
             title: widget.baseGame.title,
-            platform: widget.baseGame.platform,
+            platform: effectivePlatform,
             genre: widget.baseGame.genre,
-            playtime: apiGame.hltbMainStory?.round() ?? widget.baseGame.playtime,
+            playtime: apiGame.userPlaytime ?? widget.baseGame.playtime,
             status: widget.baseGame.status,
             cover: widget.baseGame.cover,
             pcReq: PcReq.fromString(compStatus),
@@ -184,7 +205,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
   bool get _isOwned {
     if (_removedFromLibraryLocal) return false;
     if (_addedToLibraryLocal) return true;
-    return _fullGame != null && _fullGame!.playtime > 0;
+    return _fullGame?.entryId != null || widget.entryId != null || _addedEntryId != null;
   }
 
   /// Estado del corazón (Lista de Deseados).
@@ -282,6 +303,152 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
     });
   }
 
+  Future<void> _showEditDialog() async {
+    final user = await AuthService.getCurrentUser();
+    if (user == null) return;
+    final targetId = _addedEntryId ?? widget.entryId;
+    if (targetId == null) return;
+
+    String selectedStatus = _fullGame?.status == GameStatus.playing ? 'Playing' :
+                            _fullGame?.status == GameStatus.completed ? 'Completed' :
+                            _fullGame?.status == GameStatus.abandoned ? 'Abandoned' : 'Backlog';
+    final playtimeCtrl = TextEditingController(text: _fullGame?.playtime.toString() ?? '0');
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: _bgCard,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: _border)),
+              title: const Text('Editar Entrada', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Estado', style: TextStyle(color: _textSub, fontSize: 12)),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: _bg,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: _border),
+                    ),
+                    child: DropdownButton<String>(
+                      value: selectedStatus,
+                      dropdownColor: _bgCard,
+                      isExpanded: true,
+                      underline: const SizedBox(),
+                      style: const TextStyle(color: Colors.white),
+                      items: const [
+                        DropdownMenuItem(value: 'Backlog', child: Text('Pendiente')),
+                        DropdownMenuItem(value: 'Playing', child: Text('Jugando')),
+                        DropdownMenuItem(value: 'Completed', child: Text('Completado')),
+                        DropdownMenuItem(value: 'Abandoned', child: Text('Abandonado')),
+                      ],
+                      onChanged: (v) => setDialogState(() => selectedStatus = v!),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Plataforma', style: TextStyle(color: _textSub, fontSize: 12)),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    decoration: BoxDecoration(
+                      color: _bg,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: _border),
+                    ),
+                    child: DropdownButton<Platform>(
+                      value: _fullGame?.platform ?? Platform.steam,
+                      dropdownColor: _bgCard,
+                      isExpanded: true,
+                      underline: const SizedBox(),
+                      style: const TextStyle(color: Colors.white),
+                      items: Platform.values.map((p) => DropdownMenuItem(
+                        value: p,
+                        child: Text(p.displayName),
+                      )).toList(),
+                      onChanged: (v) {
+                        if (v != null) {
+                          setDialogState(() {
+                            // Update local game immediately for the dropdown state
+                            _fullGame = _fullGame!.copyWith(platform: v);
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text('Horas jugadas', style: TextStyle(color: _textSub, fontSize: 12)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: playtimeCtrl,
+                    keyboardType: TextInputType.number,
+                    style: const TextStyle(color: Colors.white),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: _bg,
+                      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _border)),
+                      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: _yellow)),
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: Text('Cancelar', style: TextStyle(color: _textSub)),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(backgroundColor: _yellow, foregroundColor: Colors.black),
+                  onPressed: () async {
+                    Navigator.of(context).pop();
+                    setState(() => _isLoading = true);
+                    try {
+                      final int playtime = int.tryParse(playtimeCtrl.text) ?? 0;
+                      await ApiService.updateLibraryEntry(
+                        userId: user.id,
+                        entryId: targetId,
+                        status: selectedStatus,
+                        playtime: playtime,
+                        platform: _fullGame!.platform.displayName,
+                      );
+                      // Refrescar
+                      final details = await ApiService.getGameDetails(userId: user.id, entryId: targetId);
+                      final compStatus = details['compatibility'] as String?;
+                      if (mounted) {
+                        setState(() {
+                          _fullGame = _fullGame!.copyWith(
+                            playtime: playtime,
+                            status: selectedStatus == 'Playing' ? GameStatus.playing :
+                                    selectedStatus == 'Completed' ? GameStatus.completed :
+                                    selectedStatus == 'Abandoned' ? GameStatus.abandoned : GameStatus.unplayed,
+                            pcReq: PcReq.fromString(compStatus),
+                          );
+                          _isLoading = false;
+                        });
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Entrada actualizada'), backgroundColor: _bgCard));
+                      }
+                    } catch (e) {
+                      if (mounted) {
+                        setState(() => _isLoading = false);
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e'), backgroundColor: _red));
+                      }
+                    }
+                  },
+                  child: const Text('Guardar', style: TextStyle(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading || _fullGame == null) {
@@ -331,14 +498,32 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
                       onPressed: _isTogglingLibrary ? null : _toggleLibrary,
                     ),
                   ),
+                  if (_isOwned) ...[
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton.icon(
+                        icon: const Icon(Icons.edit_note_rounded),
+                        label: const Text('Editar Detalles', style: TextStyle(fontWeight: FontWeight.bold)),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: _bgCard,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: _border)),
+                          elevation: 0,
+                        ),
+                        onPressed: _showEditDialog,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 24),
 
                   // Módulo ROI
                   _RoiModule(game: game),
                   const SizedBox(height: 16),
 
-                  // Módulo Requisitos PC
-                  if (game.pcSpecs != null || game.pcReq != PcReq.yellow || (game.pcRequirements != null && game.pcRequirements!.isNotEmpty && game.pcRequirements != 'No disponibles')) ...[
+                  // Módulo Requisitos PC — solo si es juego de PC
+                  if (game.platform.isPc && (game.pcSpecs != null || game.pcReq != PcReq.yellow || (game.pcRequirements != null && game.pcRequirements!.isNotEmpty && game.pcRequirements != 'No disponibles'))) ...[
                     _PcReqModule(game: game),
                     const SizedBox(height: 16),
                   ],
@@ -472,24 +657,51 @@ class _GameSliverAppBar extends StatelessWidget {
                 ),
               ),
             ),
-            // Badges inferiores
+            // Badges inferiores — solo mostrar PC req si es un juego de PC
             Positioned(
               bottom: 50,
               left: 16,
               child: Row(
                 children: [
                   PlatformBadge(platform: game.platform),
-                  const SizedBox(width: 8),
-                  PcReqDot(pcReq: game.pcReq),
-                  const SizedBox(width: 6),
-                  Text(
-                    game.pcReq.config.label,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: game.pcReq.config.color,
-                      fontWeight: FontWeight.w600,
+                  if (game.platform.isPc) ...[
+                    const SizedBox(width: 8),
+                    PcReqDot(pcReq: game.pcReq),
+                    const SizedBox(width: 6),
+                    Text(
+                      game.pcReq.config.label,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: game.pcReq.config.color,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
+                  ],
+                  if (isOwned && game.playtime > 0) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: _border.withValues(alpha: 0.5)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.schedule_rounded, size: 12, color: Colors.white),
+                          const SizedBox(width: 4),
+                          Text(
+                            '${game.playtime}h jugadas',
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -508,34 +720,38 @@ class _RoiModule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // TODO(backend): Recibir playtime real del servidor.
-    final cph = game.rentability ?? _costPerHour(game.price, game.playtime);
+    // Usamos HLTB main story para la rentabilidad teórica
+    final int hltbHours = game.hltb?.main ?? 0;
+    // Ignoramos la rentabilidad del backend si es 0, y calculamos localmente.
+    final cph = (game.rentability != null && game.rentability! > 0) 
+        ? game.rentability! 
+        : _costPerHour(game.price, hltbHours);
     final color = _roiColor(cph);
     final label = _roiLabel(cph);
 
     return _ModuleCard(
       icon: Icons.analytics_rounded,
       iconColor: _purple,
-      title: 'Rentabilidad (ROI)',
+      title: 'Rentabilidad Teórica (ROI)',
       child: Column(
         children: [
           Row(
             children: [
-              // Precio
+              // Precio — si no es PC y vale 0, no es gratis sino sin datos
               Expanded(
                 child: _RoiStat(
                   label: 'Precio',
                   value: game.price == 0
-                      ? 'Gratis'
+                      ? (game.platform.isPc ? 'Gratis' : 'N/D')
                       : '\$${game.price.toStringAsFixed(0)}',
                   color: _textMain,
                 ),
               ),
-              // Horas jugadas
+              // Horas HLTB
               Expanded(
                 child: _RoiStat(
-                  label: 'Jugadas',
-                  value: '${game.playtime}h',
+                  label: 'HLTB est.',
+                  value: hltbHours > 0 ? '${hltbHours}h' : '—',
                   color: _cyan,
                 ),
               ),
@@ -543,7 +759,7 @@ class _RoiModule extends StatelessWidget {
               Expanded(
                 child: _RoiStat(
                   label: 'Coste/hora',
-                  value: game.price == 0
+                  value: game.price == 0 || hltbHours == 0
                       ? '—'
                       : '\$${cph.toStringAsFixed(2)}/h',
                   color: color,

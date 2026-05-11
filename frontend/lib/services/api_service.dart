@@ -51,7 +51,9 @@ class ApiGame {
   final String? platform;
   final DateTime? addedAt;
   final double? rentability;
-  final String? pcRequirements; // Nuevo campo para HTML de requisitos
+  final String? pcRequirements;
+  final List<String> rawgPlatforms; // Plataformas detectadas por RAWG
+  final int? userPlaytime;
 
   const ApiGame({
     required this.id,
@@ -71,6 +73,8 @@ class ApiGame {
     this.addedAt,
     this.rentability,
     this.pcRequirements,
+    this.rawgPlatforms = const [],
+    this.userPlaytime,
   });
 
   factory ApiGame.fromJson(Map<String, dynamic> json) {
@@ -102,13 +106,17 @@ class ApiGame {
       rentability:      _toDouble(gameDetails?['rentability']),
       pcRequirements:   gameData['pcRequirements']?.toString() ?? gameData['requirements']?['minimum']?.toString(),
       // Campos de la entrada de biblioteca
-      entryId:          json['_id']?.toString() ?? json['entryId']?.toString(),
+      entryId:          (json['userId'] != null || json['gameId'] != null || json['status'] != null) 
+                          ? json['_id']?.toString() 
+                          : json['entryId']?.toString(),
       status:           json['status']?.toString(),
       personalNote:     json['personalNote']?.toString(),
       platform:         json['platform']?.toString(),
       addedAt:          json['addedAt'] != null
           ? DateTime.tryParse(json['addedAt'].toString())
           : null,
+      userPlaytime:     json['playtime'] != null ? (json['playtime'] as num).toInt() : null,
+      rawgPlatforms:    List<String>.from(gameData['rawgPlatforms'] ?? []),
     );
   }
 
@@ -443,10 +451,14 @@ class ApiService {
     required String entryId,
     String? status,
     String? personalNote,
+    int? playtime,
+    String? platform,
   }) async {
     final body = <String, dynamic>{};
     if (status       != null) body['status']       = status;
     if (personalNote != null) body['personalNote'] = personalNote;
+    if (playtime     != null) body['playtime']     = playtime;
+    if (platform     != null) body['platform']     = platform;
 
     final r = await http
         .patch(

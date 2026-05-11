@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/game_model.dart';
 import '../services/api_service.dart';
 import 'game_detail_screen.dart';
+import 'library_screen.dart';
 
 // ── Paleta ────────────────────────────────────────────────────────────────────
 const _kBg      = Color(0xFF292929);
@@ -127,24 +128,7 @@ class _SearchResultsBodyState extends State<_SearchResultsBody> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _result = Game(
-          id:           api.title.hashCode,
-          title:        api.title,
-          platform:     Platform.steam,
-          genre:        'Acción',
-          playtime:     0,
-          status:       GameStatus.unplayed,
-          cover:        api.coverUrl,
-          pcReq:        PcReq.yellow,
-          hasCosmetics: false,
-          price:        double.tryParse(api.currentPrice ?? '0') ?? 0,
-          year:         api.addedAt?.year ?? DateTime.now().year,
-          rentability:  api.rentability,
-          hltb: HltbTimes(
-            main:          api.hltbMainStory?.round(),
-            completionist: api.hltbCompletionist?.round(),
-          ),
-        );
+        _result = LibraryScreenState.apiGameToLocal(api);
       });
     } catch (_) {
       if (!mounted) return;

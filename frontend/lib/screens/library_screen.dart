@@ -142,19 +142,57 @@ class LibraryScreenState extends State<LibraryScreen>
         return;
       }
       final apiGames = await ApiService.getLibrary(user.id);
-      final games = apiGames.map(_apiGameToLocal).toList();
+      final games = apiGames.map(apiGameToLocal).toList();
       if (mounted) setState(() { _allGames = games; _isLoading = false; });
     } catch (e) {
       if (mounted) setState(() { _loadError = e.toString(); _isLoading = false; });
     }
   }
 
-  static Game _apiGameToLocal(ApiGame api) {
+  static Game apiGameToLocal(ApiGame api) {
     Platform platform;
-    switch ((api.platform ?? 'Steam').toLowerCase()) {
-      case 'epic': platform = Platform.epic; break;
-      case 'instant gaming': platform = Platform.ig; break;
-      default: platform = Platform.steam;
+    String apiPlat = (api.platform ?? '').toLowerCase();
+
+    // 1. Priorizar selección explícita del usuario en el Edit Dialog.
+    // (Ignoramos 'steam' y 'pc' porque suelen ser el valor por defecto erróneo para juegos antiguos).
+    if (apiPlat == 'epic' || apiPlat == 'epic games') {
+      platform = Platform.epic;
+    } else if (apiPlat == 'instant gaming' || apiPlat == 'ig') {
+      platform = Platform.ig;
+    } else if (apiPlat == 'playstation' || apiPlat == 'ps4' || apiPlat == 'ps5') {
+      platform = Platform.playstation;
+    } else if (apiPlat == 'xbox' || apiPlat == 'xbox one' || apiPlat == 'xbox series') {
+      platform = Platform.xbox;
+    } else if (apiPlat == 'nintendo' || apiPlat == 'nintendo switch' || apiPlat == 'switch') {
+      platform = Platform.nintendo;
+    } else {
+      // 2. Fallback a RAWG si no hay selección manual fuerte
+      if (api.rawgPlatforms.isNotEmpty) {
+        final slugs = api.rawgPlatforms;
+        final hasPc        = slugs.any((s) => s == 'pc');
+        final hasNintendo  = slugs.any((s) => s.contains('nintendo'));
+        final hasPs        = slugs.any((s) => s.contains('playstation'));
+        final hasXbox      = slugs.any((s) => s.contains('xbox'));
+
+        if (hasPc) {
+          platform = Platform.steam;
+        } else if (hasNintendo) {
+          platform = Platform.nintendo;
+        } else if (hasPs) {
+          platform = Platform.playstation;
+        } else if (hasXbox) {
+          platform = Platform.xbox;
+        } else {
+          platform = Platform.integrated;
+        }
+      } else {
+        // 3. Fallback final
+        if ((apiPlat == 'steam' || apiPlat == 'pc') && (api.steamAppID == null || api.steamAppID!.isEmpty)) {
+          platform = Platform.integrated;
+        } else {
+          platform = Platform.steam;
+        }
+      }
     }
     GameStatus status;
     switch (api.status ?? 'Backlog') {
@@ -169,7 +207,7 @@ class LibraryScreenState extends State<LibraryScreen>
       title:        api.title,
       platform:     platform,
       genre:        'Varios',
-      playtime:     0,
+      playtime:     api.userPlaytime ?? 0,
       status:       status,
       cover:        api.imageUrl,
       pcReq:        PcReq.yellow, // Por defecto en biblioteca

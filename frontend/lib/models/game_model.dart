@@ -24,12 +24,14 @@ import 'package:flutter/material.dart';
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Plataformas de juego disponibles.
-/// Corresponde a `type Platform = 'steam' | 'epic' | 'ig' | 'integrated'`
 enum Platform {
   steam,
   epic,
   ig,
-  integrated;
+  integrated,
+  nintendo,
+  playstation,
+  xbox;
 
   /// Nombre completo de la plataforma.
   String get displayName => PlatformConfig.of(this).name;
@@ -39,6 +41,9 @@ enum Platform {
 
   /// Color asociado a la plataforma.
   Color get color => PlatformConfig.of(this).color;
+
+  /// true si el juego es de PC (tiene tienda PC asociada)
+  bool get isPc => this == Platform.steam || this == Platform.epic || this == Platform.ig;
 }
 
 /// Estado de progreso del jugador en un juego.
@@ -236,6 +241,48 @@ class Game {
     this.rating,
     this.pcRequirements,
   });
+
+  Game copyWith({
+    int? id,
+    String? entryId,
+    String? title,
+    Platform? platform,
+    String? genre,
+    int? playtime,
+    GameStatus? status,
+    String? cover,
+    PcReq? pcReq,
+    bool? hasCosmetics,
+    Cosmetics? cosmetics,
+    HltbTimes? hltb,
+    double? price,
+    int? year,
+    PcSpecs? pcSpecs,
+    double? rentability,
+    double? rating,
+    String? pcRequirements,
+  }) {
+    return Game(
+      id: id ?? this.id,
+      entryId: entryId ?? this.entryId,
+      title: title ?? this.title,
+      platform: platform ?? this.platform,
+      genre: genre ?? this.genre,
+      playtime: playtime ?? this.playtime,
+      status: status ?? this.status,
+      cover: cover ?? this.cover,
+      pcReq: pcReq ?? this.pcReq,
+      hasCosmetics: hasCosmetics ?? this.hasCosmetics,
+      cosmetics: cosmetics ?? this.cosmetics,
+      hltb: hltb ?? this.hltb,
+      price: price ?? this.price,
+      year: year ?? this.year,
+      pcSpecs: pcSpecs ?? this.pcSpecs,
+      rentability: rentability ?? this.rentability,
+      rating: rating ?? this.rating,
+      pcRequirements: pcRequirements ?? this.pcRequirements,
+    );
+  }
 }
 
 /// Modelo de usuario de la comunidad Bound2Game.
@@ -367,7 +414,7 @@ class PcReqConfig {
         return PcReqConfig(
           color: const Color(0xFFFFB800),
           background: const Color(0xFFFFB800).withValues(alpha: 0.15),
-          label: 'Puede requerir ajustes',
+          label: 'Revisar requisitos',
           icon: '⚡',
         );
       case PcReq.red:
@@ -404,6 +451,12 @@ class PlatformConfig {
         return const PlatformConfig(name: 'Instant Gaming', color: Color(0xFFFF6B00), short: 'IG');
       case Platform.integrated:
         return const PlatformConfig(name: 'Integrado', color: Color(0xFF9B59B6), short: 'B2G');
+      case Platform.nintendo:
+        return const PlatformConfig(name: 'Nintendo', color: Color(0xFFE4000F), short: 'NIN');
+      case Platform.playstation:
+        return const PlatformConfig(name: 'PlayStation', color: Color(0xFF003087), short: 'PS');
+      case Platform.xbox:
+        return const PlatformConfig(name: 'Xbox', color: Color(0xFF107C10), short: 'XBX');
     }
   }
 }

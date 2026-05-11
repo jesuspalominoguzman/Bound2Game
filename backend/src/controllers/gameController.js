@@ -84,14 +84,31 @@ const searchGame = async (req, res) => {
 
         if (cachedGame) {
             console.log(`⚡ Devolviendo '${cachedGame.title}' desde la caché de MongoDB`);
+            let modified = false;
+
             // Parche: Si es un juego antiguo en caché que tiene SteamID pero no requisitos, actualizamos
             if (cachedGame.steamAppID && (!cachedGame.pcRequirements || cachedGame.pcRequirements === 'No disponibles')) {
                 const steamReq = await gameService.getSteamRequirements(cachedGame.steamAppID);
                 if (steamReq) {
                     cachedGame.pcRequirements = steamReq;
-                    await cachedGame.save();
+                    modified = true;
                 }
             }
+
+            // Parche: Si es un juego antiguo que no tiene rawgPlatforms, actualizamos
+            if (!cachedGame.rawgPlatforms || cachedGame.rawgPlatforms.length === 0) {
+                const baseData = await gameService.getRawgData(cachedGame.title);
+                if (baseData && baseData.rawgPlatforms && baseData.rawgPlatforms.length > 0) {
+                    cachedGame.rawgPlatforms = baseData.rawgPlatforms;
+                    modified = true;
+                    console.log(`🔧 Parcheando plataformas RAWG para '${cachedGame.title}'`);
+                }
+            }
+
+            if (modified) {
+                await cachedGame.save();
+            }
+
             return res.json(cachedGame);
         }
 
@@ -162,6 +179,7 @@ const searchGame = async (req, res) => {
                 completionist: playtimeData.completionist
             },
             pcRequirements: pcRequirements || 'No disponibles',
+            rawgPlatforms: baseData?.rawgPlatforms || [],
             lastPriceUpdate: new Date()
         };
 

@@ -154,11 +154,13 @@ const getGameDetails = async (req, res) => {
 const updateEntry = async (req, res) => {
     try {
         const { userId, entryId } = req.params;
-        const { status, personalNote } = req.body;
+        const { status, personalNote, playtime, platform } = req.body;
 
         const update = {};
         if (status       !== undefined) update.status       = status;
         if (personalNote !== undefined) update.personalNote = personalNote;
+        if (playtime     !== undefined) update.playtime     = Number(playtime);
+        if (platform     !== undefined) update.platform     = platform;
 
         const entry = await UserLibrary.findOneAndUpdate(
             { _id: entryId, userId },
@@ -218,9 +220,9 @@ const getStats = async (req, res) => {
         const backlog     = entries.filter(e => e.status === 'Backlog').length;
         const abandoned   = entries.filter(e => e.status === 'Abandoned').length;
 
-        // Sumar horas HLTB (mainStory) como estimación de horas jugadas
+        // Sumar horas jugadas reales por el usuario
         const estimatedHours = entries.reduce((acc, e) => {
-            const h = e.gameId?.hltb?.mainStory;
+            const h = e.playtime;
             return acc + (typeof h === 'number' ? h : 0);
         }, 0);
 

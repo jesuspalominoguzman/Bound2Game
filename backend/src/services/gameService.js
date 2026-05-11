@@ -48,9 +48,13 @@ const getRawgData = async (title) => {
 
         console.log(`✅ RAWG encontró: '${bestMatch.name}' para búsqueda '${title}'`);
 
+        // Extraer slugs de plataforma (ej: 'pc', 'nintendo-switch', 'playstation-4')
+        const rawgPlatforms = (bestMatch.platforms || []).map(p => p.platform.slug);
+
         return {
             title: bestMatch.name,
             imageUrl: bestMatch.background_image || '',
+            rawgPlatforms,
         };
     } catch (error) {
         console.error('Error al consultar RAWG API:', error.message);

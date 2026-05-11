@@ -15,6 +15,7 @@ import '../services/api_service.dart';
 import '../services/auth_service.dart';
 import 'chat_screen.dart';
 import 'game_detail_screen.dart';
+import 'library_screen.dart';
 
 // ── Paleta local (identidad visual definitiva) ────────────────────────────────
 const _kBgCard   = Color(0xFF1A1A1A);
@@ -236,7 +237,7 @@ class _StatsGrid extends StatelessWidget {
   Widget build(BuildContext context) {
     final data = [
       _StatData(value: '${stats.total}',          description: 'Juegos en biblioteca'),
-      _StatData(value: '${stats.estimatedHours}', description: 'Horas estimadas'),
+      _StatData(value: '${stats.estimatedHours}', description: 'Horas jugadas'),
       _StatData(value: '${stats.completed}',      description: 'Completados'),
       _StatData(value: '${stats.backlog}',         description: 'Pendientes'),
     ];
@@ -341,43 +342,16 @@ class _ApiGameCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Convertir strings del backend a enums del modelo
-    final gm.Platform platform = () {
-      switch ((game.platform ?? '').toLowerCase()) {
-        case 'steam': return gm.Platform.steam;
-        case 'epic':  return gm.Platform.epic;
-        default:      return gm.Platform.steam;
-      }
-    }();
-
-    final gm.GameStatus status = () {
-      switch ((game.status ?? '').toLowerCase()) {
-        case 'playing':   return gm.GameStatus.playing;
-        case 'completed': return gm.GameStatus.completed;
-        case 'abandoned': return gm.GameStatus.abandoned;
-        default:          return gm.GameStatus.unplayed;
-      }
-    }();
+    // Usar la misma función que la biblioteca para mantener la coherencia
+    // en plataformas, horas jugadas reales, etc.
+    final gm.Game localGame = LibraryScreenState.apiGameToLocal(game);
 
     return GestureDetector(
       onTap: () {
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => GameDetailScreen(
-              baseGame: gm.Game(
-                id: int.tryParse(game.id) ?? 0,
-                title: game.title,
-                platform: platform,
-                genre: 'Varios',
-                playtime: game.hltbMainStory?.round() ?? 0,
-                status: status,
-                cover: game.coverUrl,
-                pcReq: gm.PcReq.yellow,
-                hasCosmetics: false,
-                price: game.currentPrice != null ? double.tryParse(game.currentPrice!) ?? 0 : 0,
-                year: game.addedAt?.year ?? DateTime.now().year,
-                pcRequirements: game.pcRequirements,
-              ),
+              baseGame: localGame,
               entryId: game.entryId,
             ),
           ),
@@ -430,12 +404,12 @@ class _ApiGameCard extends StatelessWidget {
                         const SizedBox(height: 3),
                         _StatusBadge(status: game.status!),
                       ],
-                      if (game.hltbMainStory != null) ...[
+                      if (localGame.playtime > 0) ...[
                         const SizedBox(height: 3),
                         Row(children: [
                           const Icon(Icons.schedule_rounded, size: 9, color: _kMuted),
                           const SizedBox(width: 2),
-                          Text('${game.hltbMainStory!.toStringAsFixed(0)}h',
+                          Text('${localGame.playtime}h',
                               style: GoogleFonts.inter(fontSize: 9, color: _kMuted)),
                         ]),
                       ],

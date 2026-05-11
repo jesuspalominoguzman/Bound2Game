@@ -27,6 +27,10 @@ const userLibrarySchema = new mongoose.Schema({
         enum: ['Backlog', 'Playing', 'Completed', 'Abandoned'],
         default: 'Backlog'
     },
+    playtime: {
+        type: Number,
+        default: 0
+    },
     personalNote: {
         type: String,
         default: ''

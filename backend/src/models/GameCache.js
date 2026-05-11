@@ -26,6 +26,8 @@ const gameCacheSchema = new mongoose.Schema({
         recommended_ram: { type: Number, default: null }
     },
     pcRequirements: { type: String, default: null },
+    // Plataformas detectadas por RAWG (ej: ['pc', 'nintendo-switch', 'playstation-4'])
+    rawgPlatforms: { type: [String], default: [] },
     // HowLongToBeat
     hltb: {
         mainStory:     { type: Number, default: null },
