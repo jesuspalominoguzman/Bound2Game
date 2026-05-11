@@ -16,6 +16,7 @@ import 'package:giphy_get/giphy_get.dart';
 import '../models/user_model.dart';
 import '../services/socket_service.dart';
 import '../services/auth_service.dart';
+import 'user_profile_screen.dart';
 
 // TODO: Mueve esta clave a una variable de entorno o a flutter_dotenv.
 // Obtén tu API Key gratuita en https://developers.giphy.com/
@@ -25,16 +26,16 @@ const _kGiphyApiKey = 'BSgmdKZuDX7iOouqo0eDnQl0340CRxc8';
 
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
-const _bg = Color(0xFF0D0D0D);
-const _bgCard = Color(0xFF181818);
-const _bgCard2 = Color(0xFF1E1E1E);
-const _border = Color(0xFF252525);
+const _bg       = Color(0xFF0D0D0D);
+const _bgCard   = Color(0xFF181818);
+const _bgCard2  = Color(0xFF1E1E1E);
+const _border   = Color(0xFF252525);
 const _textMain = Color(0xFFE0E0E0);
 const _textMuted = Color(0xFF4A4A4A);
-const _textSub = Color(0xFF777777);
-const _cyan = Color(0xFF00E5FF);
-const _cyanDark = Color(0xFF00B8CC);
-const _green = Color(0xFF39FF7E);
+const _textSub  = Color(0xFF777777);
+const _yellow   = Color(0xFFFFB800);
+const _yellowDark = Color(0xFFCC9200);
+const _green    = Color(0xFF39FF7E);
 
 // =============================================================================
 // MODEL: ChatMessage
@@ -275,7 +276,7 @@ class _ChatScreenState extends State<ChatScreen> {
       return const Scaffold(
         backgroundColor: _bg,
         body: Center(
-          child: CircularProgressIndicator(color: _cyan),
+          child: CircularProgressIndicator(color: _yellow, strokeWidth: 2),
         ),
       );
     }
@@ -376,99 +377,81 @@ class _ChatAppBar extends StatelessWidget {
             onTap: () => Navigator.of(context).pop(),
             child: Container(
               padding: const EdgeInsets.all(8),
-              child: const Icon(
-                Icons.arrow_back_rounded,
-                color: _textMain,
-                size: 22,
-              ),
+              child: const Icon(Icons.arrow_back_rounded, color: _textMain, size: 22),
             ),
           ),
           const SizedBox(width: 4),
 
-          // Avatar
-          Stack(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundColor: const Color(0xFF252525),
-                backgroundImage:
-                    user.avatarUrl != null && user.avatarUrl!.isNotEmpty
-                    ? NetworkImage(user.avatarUrl!)
-                    : null,
-                child: user.avatarUrl == null || user.avatarUrl!.isEmpty
-                    ? Text(
-                        user.username[0].toUpperCase(),
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: _cyan,
+          // Avatar + nombre CLICKABLES → abren el perfil del usuario
+          Expanded(
+            child: GestureDetector(
+              onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => UserProfileScreen(user: user),
+              )),
+              child: Row(
+                children: [
+                  // Avatar con borde amarillo
+                  Stack(
+                    children: [
+                      Container(
+                        width: 42, height: 42,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: user.avatarBgColor,
+                          border: Border.all(color: _yellow.withValues(alpha: 0.6), width: 2),
                         ),
-                      )
-                    : null,
-              ),
-              // Indicador online
-              if (user.isOnline)
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: Container(
-                    width: 10,
-                    height: 10,
-                    decoration: BoxDecoration(
-                      color: _green,
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: const Color(0xFF111111),
-                        width: 2,
+                        child: user.avatarUrl != null && user.avatarUrl!.isNotEmpty
+                            ? ClipOval(child: Image.network(user.avatarUrl!, fit: BoxFit.cover,
+                                errorBuilder: (_, _, _) => Center(child: Text(
+                                  user.username[0].toUpperCase(),
+                                  style: const TextStyle(color: Colors.black, fontSize: 14, fontWeight: FontWeight.w800)))))
+                            : Center(child: Text(
+                                user.username[0].toUpperCase(),
+                                style: const TextStyle(color: Colors.black, fontSize: 14, fontWeight: FontWeight.w800))),
                       ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: _green.withValues(alpha: 0.5),
-                          blurRadius: 4,
+                      // Indicador online
+                      if (user.isOnline)
+                        Positioned(
+                          bottom: 0, right: 0,
+                          child: Container(
+                            width: 11, height: 11,
+                            decoration: BoxDecoration(
+                              color: _green,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: const Color(0xFF111111), width: 2),
+                              boxShadow: [BoxShadow(color: _green.withValues(alpha: 0.5), blurRadius: 4)],
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(width: 10),
+
+                  // Nombre + estado
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(children: [
+                          Text(user.username,
+                            style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w700, color: _textMain)),
+                          const SizedBox(width: 5),
+                          const Icon(Icons.open_in_new_rounded, color: _yellow, size: 12),
+                        ]),
+                        Text(
+                          user.isOnline ? 'En línea · Toca para ver perfil' : 'Desconectado · Toca para ver perfil',
+                          style: TextStyle(fontSize: 10, color: user.isOnline ? _green : _textMuted),
+                          maxLines: 1, overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
                   ),
-                ),
-            ],
-          ),
-          const SizedBox(width: 10),
-
-          // Nombre + estado
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  user.username,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: _textMain,
-                  ),
-                ),
-                Text(
-                  user.isOnline ? 'En línea' : 'Desconectado',
-                  style: TextStyle(
-                    fontSize: 10,
-                    color: user.isOnline ? _green : _textMuted,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+                ],
+              ),
             ),
           ),
-
-          // Botón más opciones
-          GestureDetector(
-            onTap: () {},
-            child: const Icon(
-              Icons.more_vert_rounded,
-              color: _textSub,
-              size: 20,
-            ),
-          ),
+          // Los 3 puntos han sido eliminados
         ],
       ),
     );
@@ -485,19 +468,19 @@ class _EphemeralBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
       decoration: BoxDecoration(
-        color: const Color(0xFF0A1520),
+        color: const Color(0xFF1A1500),
         border: const Border(
-          bottom: BorderSide(color: Color(0xFF1A2535), width: 1),
+          bottom: BorderSide(color: Color(0xFF2A2200), width: 1),
         ),
       ),
       child: Row(
         children: [
-          const Icon(Icons.timer_outlined, size: 12, color: Color(0xFF4A8FBF)),
+          Icon(Icons.timer_outlined, size: 12, color: _yellow.withValues(alpha: 0.7)),
           const SizedBox(width: 7),
-          const Expanded(
+          Expanded(
             child: Text(
               'Chat efímero · Los mensajes se eliminan cada 24 horas',
-              style: TextStyle(fontSize: 10, color: Color(0xFF4A8FBF)),
+              style: TextStyle(fontSize: 10, color: _yellow.withValues(alpha: 0.7)),
             ),
           ),
         ],
@@ -581,7 +564,7 @@ class _MessageBubble extends StatelessWidget {
               child: showAvatar
                   ? CircleAvatar(
                       radius: 13,
-                      backgroundColor: const Color(0xFF252525),
+                      backgroundColor: user.avatarBgColor,
                       backgroundImage:
                           user.avatarUrl != null && user.avatarUrl!.isNotEmpty
                           ? NetworkImage(user.avatarUrl!)
@@ -590,10 +573,7 @@ class _MessageBubble extends StatelessWidget {
                           ? Text(
                               user.username[0].toUpperCase(),
                               style: const TextStyle(
-                                fontSize: 10,
-                                color: _cyan,
-                              ),
-                            )
+                                fontSize: 10, color: Colors.black, fontWeight: FontWeight.w700))
                           : null,
                     )
                   : null,
@@ -634,7 +614,7 @@ class _MessageBubble extends StatelessWidget {
                           child: const Center(
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
-                              color: _cyan,
+                              color: _yellow,
                             ),
                           ),
                         );
@@ -663,7 +643,7 @@ class _MessageBubble extends StatelessWidget {
                       vertical: 9,
                     ),
                     decoration: BoxDecoration(
-                      color: isMe ? _cyan : _bgCard,
+                      color: isMe ? _yellow : _bgCard,
                       borderRadius: BorderRadius.only(
                         topLeft: const Radius.circular(16),
                         topRight: const Radius.circular(16),
@@ -673,7 +653,7 @@ class _MessageBubble extends StatelessWidget {
                       boxShadow: isMe
                           ? [
                               BoxShadow(
-                                color: _cyan.withValues(alpha: 0.18),
+                                color: _yellow.withValues(alpha: 0.2),
                                 blurRadius: 8,
                                 offset: const Offset(0, 3),
                               ),
@@ -817,7 +797,7 @@ class _ChatInputBar extends StatelessWidget {
             icon: showEmojiPicker
                 ? Icons.keyboard_rounded
                 : Icons.emoji_emotions_outlined,
-            color: showEmojiPicker ? _cyan : _textSub,
+            color: showEmojiPicker ? _yellow : _textSub,
             onTap: onToggleEmoji,
           ),
           const SizedBox(width: 6),
@@ -831,13 +811,13 @@ class _ChatInputBar extends StatelessWidget {
                 color: _bgCard2,
                 borderRadius: BorderRadius.circular(22),
                 border: Border.all(
-                  color: isFocused ? _cyan.withValues(alpha: 0.45) : _border,
+                  color: isFocused ? _yellow.withValues(alpha: 0.5) : _border,
                   width: isFocused ? 1.5 : 1,
                 ),
                 boxShadow: isFocused
                     ? [
                         BoxShadow(
-                          color: _cyan.withValues(alpha: 0.06),
+                          color: _yellow.withValues(alpha: 0.07),
                           blurRadius: 12,
                         ),
                       ]
@@ -885,12 +865,11 @@ class _ChatInputBar extends StatelessWidget {
                 onTap: onSend,
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
-                  width: 42,
-                  height: 42,
+                  width: 42, height: 42,
                   decoration: BoxDecoration(
                     gradient: hasText
                         ? const LinearGradient(
-                            colors: [_cyan, _cyanDark],
+                            colors: [_yellow, _yellowDark],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           )
@@ -899,12 +878,7 @@ class _ChatInputBar extends StatelessWidget {
                     shape: BoxShape.circle,
                     border: hasText ? null : Border.all(color: _border),
                     boxShadow: hasText
-                        ? [
-                            BoxShadow(
-                              color: _cyan.withValues(alpha: 0.3),
-                              blurRadius: 10,
-                            ),
-                          ]
+                        ? [BoxShadow(color: _yellow.withValues(alpha: 0.35), blurRadius: 10)]
                         : [],
                   ),
                   child: Icon(

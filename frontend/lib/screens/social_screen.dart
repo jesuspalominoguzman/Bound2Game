@@ -4,10 +4,11 @@
 
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
-import '../models/game_model.dart' hide User;
 import '../widgets/user_card.dart';
 import '../services/api_service.dart';
-import 'game_detail_screen.dart';
+import 'user_search_delegate.dart';
+import 'friend_library_screen.dart';
+import 'user_profile_screen.dart';
 
 // ── Constantes de color ───────────────────────────────────────────────────────
 const _bg        = Color(0xFF292929);
@@ -18,7 +19,6 @@ const _textMuted = Color(0xFF555555);
 const _textSub   = Color(0xFF888888);
 const _green     = Color(0xFF4AF626);
 const _yellow    = Color(0xFFFFB800);
-const _cyan      = Color(0xFF00E5FF);
 
 class SocialScreen extends StatefulWidget {
   const SocialScreen({super.key});
@@ -35,12 +35,13 @@ class _SocialScreenState extends State<SocialScreen> {
   String _searchQuery = '';
 
   late Future<List<User>> _friendsFuture;
+  late Future<List<UserSearchResult>> _pendingFuture;
 
   @override
   void initState() {
     super.initState();
-    _loadFriends();
-    
+    _loadData();
+
     _searchCtrl.addListener(
       () => setState(() => _searchQuery = _searchCtrl.text.trim().toLowerCase()),
     );
@@ -49,14 +50,13 @@ class _SocialScreenState extends State<SocialScreen> {
     );
   }
 
-  void _loadFriends() {
+  void _loadData() {
     _friendsFuture = ApiService.fetchFriends();
+    _pendingFuture = ApiService.getPendingRequests();
   }
 
   Future<void> _refresh() async {
-    setState(() {
-      _loadFriends();
-    });
+    setState(_loadData);
   }
 
   @override
@@ -66,16 +66,39 @@ class _SocialScreenState extends State<SocialScreen> {
     super.dispose();
   }
 
+  void _openUserSearch(List<User> friends) {
+    final friendIds = friends.map((f) => f.id).toSet();
+    showSearch(
+      context: context,
+      delegate: UserSearchDelegate(myFriendIds: friendIds),
+    ).then((_) => setState(_loadData)); // refrescar al volver
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
+      floatingActionButton: FutureBuilder<List<User>>(
+        future: _friendsFuture,
+        builder: (context, snapshot) {
+          final friends = snapshot.data ?? [];
+          return FloatingActionButton(
+            heroTag: 'social_search_fab',
+            onPressed: () => _openUserSearch(friends),
+            backgroundColor: _yellow,
+            foregroundColor: Colors.black,
+            elevation: 6,
+            tooltip: 'Buscar jugadores',
+            child: const Icon(Icons.person_search_rounded, size: 24),
+          );
+        },
+      ),
       body: FutureBuilder<List<User>>(
         future: _friendsFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(
-              child: CircularProgressIndicator(color: _cyan, strokeWidth: 2),
+              child: CircularProgressIndicator(color: _yellow, strokeWidth: 2),
             );
           }
           if (snapshot.hasError) {
@@ -89,7 +112,7 @@ class _SocialScreenState extends State<SocialScreen> {
                   const SizedBox(height: 16),
                   TextButton(
                     onPressed: _refresh,
-                    child: const Text('Reintentar', style: TextStyle(color: _cyan)),
+                    child: const Text('Reintentar', style: TextStyle(color: _yellow)),
                   )
                 ],
               ),
@@ -109,44 +132,24 @@ class _SocialScreenState extends State<SocialScreen> {
 
           return RefreshIndicator(
             onRefresh: _refresh,
-            color: _cyan,
+            color: _yellow,
             backgroundColor: _bgCard,
             child: CustomScrollView(
               physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
               slivers: [
                 const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-                // ── Sección 1: Populares entre tus amigos (Simulada por ahora)
+                // ── Solicitudes de amistad pendientes ─────────────────────────
                 SliverToBoxAdapter(
-                  child: const _SectionHeader(title: 'Populares entre tus amigos'),
-                ),
-                const SliverToBoxAdapter(child: SizedBox(height: 12)),
-                SliverToBoxAdapter(
-                  child: SizedBox(
-                    height: 140,
-                    child: ListView.separated(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      scrollDirection: Axis.horizontal,
-                      physics: const BouncingScrollPhysics(),
-                      itemCount: sampleGames.length,
-                      separatorBuilder: (_, _) => const SizedBox(width: 12),
-                      itemBuilder: (context, index) {
-                        final game = sampleGames[index];
-                        final playingFriends = friends.take((index % 2) + 2).toList();
-                        
-                        return GestureDetector(
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => GameDetailScreen(baseGame: game),
-                              ),
-                            );
-                          },
-                          child: _GameCoverCard(game: game, playingFriends: playingFriends),
-                        );
-                      },
-                    ),
+                  child: _PendingRequestsSection(
+                    future: _pendingFuture,
+                    onAction: () => setState(_loadData),
                   ),
+                ),
+
+                // ── Sección: Populares entre tus amigos (datos reales) ──────
+                SliverToBoxAdapter(
+                  child: _PopularGamesSection(friends: friends),
                 ),
                 const SliverToBoxAdapter(child: SizedBox(height: 32)),
 
@@ -214,6 +217,15 @@ class _SocialScreenState extends State<SocialScreen> {
                                 (context, index) => UserCard(
                                   user: filtered[index],
                                   isFriend: true,
+                                  onLibraryTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => FriendLibraryScreen(
+                                          friend: filtered[index],
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
                                 childCount: filtered.length,
                               ),
@@ -251,87 +263,305 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-class _GameCoverCard extends StatelessWidget {
-  const _GameCoverCard({
-    required this.game,
-    required this.playingFriends,
-  });
-  
-  final Game game;
-  final List<User> playingFriends;
+// ───────────────────────────────────────────────────────────────────────────────
+// Sección dinámica de juegos populares entre amigos
+// ───────────────────────────────────────────────────────────────────────────────
+
+// =============================================================================
+// Sección de solicitudes de amistad pendientes — paleta amarillo/negro
+// =============================================================================
+
+class _PendingRequestsSection extends StatelessWidget {
+  const _PendingRequestsSection({required this.future, required this.onAction});
+  final Future<List<UserSearchResult>> future;
+  final VoidCallback onAction;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 100,
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(12),
-        color: _bgCard,
-        image: DecorationImage(
-          image: NetworkImage(game.cover),
-          fit: BoxFit.cover,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          )
-        ],
-      ),
-      child: Stack(
-        children: [
-          if (playingFriends.isNotEmpty)
-            Positioned(
-              bottom: 5,
-              right: 5,
+    return FutureBuilder<List<UserSearchResult>>(
+      future: future,
+      builder: (ctx, snap) {
+        // No mostrar nada mientras carga o si hay error
+        if (snap.connectionState == ConnectionState.waiting) return const SizedBox.shrink();
+        if (snap.hasError) return const SizedBox.shrink();
+        final requests = snap.data ?? [];
+        if (requests.isEmpty) return const SizedBox.shrink();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: playingFriends.asMap().entries.map((entry) {
-                  final friend = entry.value;
-                  return Align(
-                    widthFactor: 0.6,
-                    child: Container(
-                      width: 24,
-                      height: 24,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: _bgCard, width: 1.5),
-                        color: friend.avatarBgColor,
-                      ),
-                      child: friend.avatarUrl != null && friend.avatarUrl!.isNotEmpty
-                          ? ClipOval(
-                              child: Image.network(
-                                friend.avatarUrl!,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => _FallbackInitial(user: friend),
-                              ),
-                            )
-                          : _FallbackInitial(user: friend),
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0x33FFB800),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: const Color(0xFFFFB800).withValues(alpha: 0.5)),
                     ),
-                  );
-                }).toList(),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.person_add_alt_1_rounded, color: _yellow, size: 14),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${requests.length} solicitud${requests.length == 1 ? '' : 'es'} pendiente${requests.length == 1 ? '' : 's'}',
+                        style: const TextStyle(color: _yellow, fontSize: 12, fontWeight: FontWeight.w700),
+                      ),
+                    ]),
+                  ),
+                ],
               ),
             ),
+            ...requests.map((req) => _PendingRequestTile(
+              request: req,
+              onAction: onAction,
+            )),
+            const SizedBox(height: 8),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _PendingRequestTile extends StatefulWidget {
+  const _PendingRequestTile({required this.request, required this.onAction});
+  final UserSearchResult request;
+  final VoidCallback onAction;
+
+  @override
+  State<_PendingRequestTile> createState() => _PendingRequestTileState();
+}
+
+class _PendingRequestTileState extends State<_PendingRequestTile> {
+  bool _accepting = false;
+  bool _done = false;
+
+  Future<void> _accept() async {
+    setState(() => _accepting = true);
+    try {
+      await ApiService.sendFriendRequest(widget.request.id);
+      if (mounted) {
+        setState(() => _done = true);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('¡Ahora eres amigo de ${widget.request.username}! 🎮'),
+          backgroundColor: const Color(0xFF1A1A1A),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ));
+        // Breve pausa y recargar la pantalla
+        await Future.delayed(const Duration(milliseconds: 600));
+        widget.onAction();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _accepting = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: ${e.toString()}'),
+          backgroundColor: const Color(0xFF2A1A1A),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        ));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_done) return const SizedBox.shrink();
+
+    final initials = widget.request.username.length >= 2
+        ? widget.request.username.substring(0, 2).toUpperCase()
+        : widget.request.username.toUpperCase();
+
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1A1A),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _yellow.withValues(alpha: 0.3), width: 1.5),
+        boxShadow: [BoxShadow(color: _yellow.withValues(alpha: 0.06), blurRadius: 12)],
+      ),
+      child: Row(
+        children: [
+          // Avatar
+          Container(
+            width: 46, height: 46,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: _yellow,
+              border: Border.all(color: _yellow.withValues(alpha: 0.5), width: 2),
+            ),
+            child: Center(child: Text(initials,
+              style: const TextStyle(color: Colors.black, fontSize: 15, fontWeight: FontWeight.w800))),
+          ),
+          const SizedBox(width: 12),
+          // Info
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(widget.request.username,
+                style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Row(children: [
+                const Icon(Icons.star_rounded, color: _yellow, size: 11),
+                const SizedBox(width: 3),
+                Text('${widget.request.karma} karma',
+                  style: const TextStyle(color: _textSub, fontSize: 11)),
+                const SizedBox(width: 8),
+                const Text('quiere ser tu amigo',
+                  style: TextStyle(color: _textSub, fontSize: 11)),
+              ]),
+            ]),
+          ),
+          const SizedBox(width: 8),
+          // Botón Aceptar
+          _accepting
+              ? const SizedBox(width: 32, height: 32,
+                  child: CircularProgressIndicator(color: _yellow, strokeWidth: 2))
+              : GestureDetector(
+                  onTap: _accept,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: _yellow,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: const Text('Aceptar',
+                      style: TextStyle(color: Colors.black, fontSize: 12, fontWeight: FontWeight.w800)),
+                  ),
+                ),
         ],
       ),
     );
   }
 }
 
-class _FallbackInitial extends StatelessWidget {
-  const _FallbackInitial({required this.user});
-  final User user;
+// =============================================================================
+// Sección "Populares entre tus amigos" — carátulas reales de cada amigo
+// =============================================================================
+
+/// Muestra las portadas de los juegos recientes de los amigos.
+/// Cada amigo aporta hasta 2 carátulas; se muestran en scroll horizontal.
+class _PopularGamesSection extends StatelessWidget {
+  const _PopularGamesSection({required this.friends});
+  final List<User> friends;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Text(
-        user.initials,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 8,
-          fontWeight: FontWeight.w700,
+    // Recoger (usuario, coverUrl) para cada juego reciente con URL de portada
+    final covers = friends
+        .expand((f) => f.recentGameCovers.map((c) => (f, c)))
+        .take(12)
+        .toList();
+
+    if (covers.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const _SectionHeader(title: 'Populares entre tus amigos'),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 120,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            physics: const BouncingScrollPhysics(),
+            itemCount: covers.length,
+            separatorBuilder: (_, _) => const SizedBox(width: 10),
+            itemBuilder: (context, i) {
+              final (friend, coverUrl) = covers[i];
+              return _CoverCard(friend: friend, coverUrl: coverUrl);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _CoverCard extends StatefulWidget {
+  const _CoverCard({required this.friend, required this.coverUrl});
+  final User friend;
+  final String coverUrl;
+
+  @override
+  State<_CoverCard> createState() => _CoverCardState();
+}
+
+class _CoverCardState extends State<_CoverCard> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        // Abrir perfil del amigo dueño de esta carátula
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => UserProfileScreen(user: widget.friend),
+        ));
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 130),
+        width: 82,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: _pressed ? _yellow.withValues(alpha: 0.7) : Colors.transparent,
+            width: 2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: _pressed ? 0.5 : 0.3),
+              blurRadius: _pressed ? 14 : 8,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(10),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Image.network(
+                widget.coverUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, _, _) => Container(
+                  color: const Color(0xFF1A1A1A),
+                  child: const Icon(Icons.videogame_asset_rounded,
+                      color: Color(0xFF333333), size: 28),
+                ),
+              ),
+              // Mini-avatar del amigo en esquina inferior derecha
+              Positioned(
+                bottom: 5, right: 5,
+                child: Container(
+                  width: 22, height: 22,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: _yellow,
+                    border: Border.all(color: Colors.black, width: 1.5),
+                  ),
+                  child: Center(
+                    child: Text(
+                      widget.friend.username.substring(0, 1).toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -515,12 +745,13 @@ class _NoFriendsState extends StatelessWidget {
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: _cyan.withValues(alpha: 0.1),
+                color: _yellow.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
+                border: Border.all(color: _yellow.withValues(alpha: 0.3), width: 1.5),
               ),
               child: const Icon(
                 Icons.people_alt_rounded,
-                color: _cyan,
+                color: _yellow,
                 size: 36,
               ),
             ),
@@ -536,7 +767,7 @@ class _NoFriendsState extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Encuentra a otros jugadores usando\nla barra de búsqueda superior.',
+              'Pulsa el botón amarillo para buscar\njugadores y añadirlos como amigos.',
               style: TextStyle(
                 fontSize: 14,
                 color: _textSub,
