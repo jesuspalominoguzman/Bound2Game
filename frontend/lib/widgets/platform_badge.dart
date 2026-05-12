@@ -17,17 +17,19 @@ class PlatformBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final cfg = PlatformConfig.of(platform);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(4),
+        color: cfg.color.withValues(alpha: 0.15),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: cfg.color.withValues(alpha: 0.4)),
       ),
       child: Text(
         cfg.name,
         style: TextStyle(
-          fontSize: 9,
-          fontWeight: FontWeight.w600,
+          fontSize: 10,
+          fontWeight: FontWeight.w700,
           color: cfg.color,
+          shadows: const [Shadow(color: Colors.black, blurRadius: 4)],
         ),
       ),
     );

@@ -13,7 +13,11 @@ const searchSteamFallback = async (title) => {
         if (!items || items.length === 0) return null;
 
         const exact = items.find(i => i.name.toLowerCase() === title.toLowerCase());
-        const best = exact || items[0];
+        let best = exact;
+        if (!best) {
+            best = items.find(i => Math.abs(i.name.length - title.length) <= 12);
+        }
+        if (!best) return null;
 
         return {
             title: best.name,
@@ -44,7 +48,11 @@ const searchOpenCriticFallback = async (title) => {
         if (!Array.isArray(resp.data) || resp.data.length === 0) return null;
 
         const exact = resp.data.find(g => g.name.toLowerCase() === title.toLowerCase());
-        const best = exact || resp.data[0];
+        let best = exact;
+        if (!best) {
+            best = resp.data.find(g => Math.abs(g.name.length - title.length) <= 12);
+        }
+        if (!best) return null;
 
         const imgBase = 'https://img.opencritic.com/';
         let imageUrl = '';
@@ -160,6 +168,11 @@ const searchGame = async (req, res) => {
                 },
                 pcRequirements: pcRequirements || 'No disponibles',
                 rawgPlatforms: baseData.rawgPlatforms || [],
+                // Metadatos extras de RAWG
+                releaseYear: baseData.releaseYear || null,
+                genres: baseData.genres || [],
+                metacritic: baseData.metacritic || null,
+                esrbRating: baseData.esrbRating || null,
                 lastPriceUpdate: new Date()
             };
 

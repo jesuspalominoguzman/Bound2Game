@@ -221,6 +221,15 @@ class Game {
   /// Requisitos de PC en formato HTML (viene de la API).
   final String? pcRequirements;
 
+  /// Puntuación de Metacritic (0-100)
+  final int? metacritic;
+
+  /// Clasificación ESRB (ej: 'Teen', 'Mature 17+', 'Everyone')
+  final String? esrbRating;
+
+  /// Lista de géneros completa (ej: ['Strategy', 'Action', 'RPG'])
+  final List<String> genres;
+
   const Game({
     required this.id,
     this.entryId,
@@ -240,6 +249,9 @@ class Game {
     this.rentability,
     this.rating,
     this.pcRequirements,
+    this.metacritic,
+    this.esrbRating,
+    this.genres = const [],
   });
 
   Game copyWith({
@@ -261,6 +273,9 @@ class Game {
     double? rentability,
     double? rating,
     String? pcRequirements,
+    int? metacritic,
+    String? esrbRating,
+    List<String>? genres,
   }) {
     return Game(
       id: id ?? this.id,
@@ -281,6 +296,9 @@ class Game {
       rentability: rentability ?? this.rentability,
       rating: rating ?? this.rating,
       pcRequirements: pcRequirements ?? this.pcRequirements,
+      metacritic: metacritic ?? this.metacritic,
+      esrbRating: esrbRating ?? this.esrbRating,
+      genres: genres ?? this.genres,
     );
   }
 }

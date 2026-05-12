@@ -175,7 +175,14 @@ class LibraryScreenState extends State<LibraryScreen>
         final hasXbox      = slugs.any((s) => s.contains('xbox'));
 
         if (hasPc) {
-          platform = Platform.steam;
+          if (api.steamAppID != null && api.steamAppID!.isNotEmpty) {
+            platform = Platform.steam;
+          } else if ((api.cheapestStore ?? '').toLowerCase().contains('epic')) {
+            platform = Platform.epic;
+          } else {
+            // Juegos populares de PC sin SteamID (ej. Valorant, LoL) suelen ser de Epic o cliente propio.
+            platform = Platform.epic; 
+          }
         } else if (hasNintendo) {
           platform = Platform.nintendo;
         } else if (hasPs) {
@@ -188,7 +195,7 @@ class LibraryScreenState extends State<LibraryScreen>
       } else {
         // 3. Fallback final
         if ((apiPlat == 'steam' || apiPlat == 'pc') && (api.steamAppID == null || api.steamAppID!.isEmpty)) {
-          platform = Platform.integrated;
+          platform = Platform.epic; // Cambiamos integrated por epic
         } else {
           platform = Platform.steam;
         }
@@ -206,15 +213,18 @@ class LibraryScreenState extends State<LibraryScreen>
       entryId:      api.entryId,
       title:        api.title,
       platform:     platform,
-      genre:        'Varios',
+      genre:        api.genres.isNotEmpty ? api.genres.first : 'Varios',
       playtime:     api.userPlaytime ?? 0,
       status:       status,
       cover:        api.imageUrl,
       pcReq:        PcReq.yellow, // Por defecto en biblioteca
       hasCosmetics: false,
       price:        double.tryParse(api.currentPrice ?? '0') ?? 0,
-      year:         api.addedAt?.year ?? DateTime.now().year,
+      year:         api.releaseYear ?? 0,
       rentability:  api.rentability,
+      metacritic:   api.metacritic,
+      esrbRating:   api.esrbRating,
+      genres:       api.genres,
       hltb: HltbTimes(
         main:          api.hltbMainStory?.round(),
         completionist: api.hltbCompletionist?.round(),

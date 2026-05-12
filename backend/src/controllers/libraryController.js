@@ -39,7 +39,8 @@ const addGameToLibrary = async (req, res) => {
         }
 
         // 1. Buscar primero en la caché de MongoDB (evita rate limits de APIs externas)
-        let gameCache = await GameCache.findOne({ title: { $regex: new RegExp(gameName, 'i') } });
+        // Búsqueda exacta para evitar que "League of Legends" haga match con "CONVERGENCE: A League of Legends Story"
+        let gameCache = await GameCache.findOne({ title: { $regex: new RegExp('^' + gameName + '$', 'i') } });
 
         // 2. Si no está en caché, buscar en APIs externas y guardar
         if (!gameCache) {

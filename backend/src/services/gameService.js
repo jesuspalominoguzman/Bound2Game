@@ -48,6 +48,10 @@ const getRawgData = async (title) => {
             title: match.name,
             imageUrl: match.background_image || '',
             rawgPlatforms: (match.platforms || []).map(p => p.platform.slug),
+            releaseYear: match.released ? parseInt(match.released.split('-')[0]) : null,
+            genres: (match.genres || []).map(g => g.name),
+            metacritic: match.metacritic || null,
+            esrbRating: match.esrb_rating?.name || null,
         }));
     } catch (error) {
         console.error('Error al consultar RAWG API:', error.message);
@@ -76,12 +80,19 @@ const getCheapSharkData = async (title) => {
         if (!bestMatch) {
             bestMatch = searchResponse.data.find(g => {
                 const name = g.external.toLowerCase();
-                return !name.includes('sfx') && !name.includes('soundtrack') && !name.includes('dlc') && !name.includes('pack');
+                const isNotDLC = !name.includes('sfx') && !name.includes('soundtrack') && !name.includes('dlc') && !name.includes('pack');
+                // Evitar que "Ruined King: A League of Legends Story" (38) se fusione con "League of Legends" (17)
+                const isSimilarLength = Math.abs(name.length - title.length) <= 12;
+                return isNotDLC && isSimilarLength;
             });
         }
 
-        // Si todos eran DLCs, cogemos el primero por defecto
-        const gameInfo = bestMatch || searchResponse.data[0];
+        // Si no hay match exacto ni similar, descartamos CheapShark para no contaminar los datos de RAWG
+        if (!bestMatch) {
+            return null;
+        }
+
+        const gameInfo = bestMatch;
         const gameId = gameInfo.gameID;
 
         // Segunda petición: Obtener detalles usando el gameId

@@ -159,10 +159,10 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
       final compStatus = details['compatibility'] as String?;
 
       if (mounted) {
-        // Si no hay steamAppID, el juego no es de PC aunque el campo diga 'Steam'
+        // Si no hay steamAppID, el juego probablemente sea de Epic o cliente propio
         final effectivePlatform = (widget.baseGame.platform == Platform.steam &&
                 (apiGame.steamAppID == null || apiGame.steamAppID!.isEmpty))
-            ? Platform.integrated
+            ? Platform.epic
             : widget.baseGame.platform;
 
         setState(() {
@@ -171,15 +171,18 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
             entryId: widget.entryId,
             title: widget.baseGame.title,
             platform: effectivePlatform,
-            genre: widget.baseGame.genre,
+            genre: apiGame.genres.isNotEmpty ? apiGame.genres.first : widget.baseGame.genre,
             playtime: apiGame.userPlaytime ?? widget.baseGame.playtime,
             status: widget.baseGame.status,
             cover: widget.baseGame.cover,
             pcReq: PcReq.fromString(compStatus),
             hasCosmetics: widget.baseGame.hasCosmetics,
             price: double.tryParse(apiGame.currentPrice ?? '0') ?? widget.baseGame.price,
-            year: apiGame.addedAt?.year ?? widget.baseGame.year,
+            year: apiGame.releaseYear ?? widget.baseGame.year,
             rentability: apiGame.rentability,
+            metacritic: apiGame.metacritic,
+            esrbRating: apiGame.esrbRating,
+            genres: apiGame.genres.isNotEmpty ? apiGame.genres : widget.baseGame.genres,
             hltb: HltbTimes(
               main: apiGame.hltbMainStory?.round(),
               completionist: apiGame.hltbCompletionist?.round(),
@@ -241,7 +244,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
         final newEntryId = await ApiService.addToLibrary(
           userId: user.id,
           gameTitle: widget.baseGame.title,
-          platform: 'PC', // por defecto
+          platform: widget.baseGame.platform.displayName, // En vez de 'PC' forzado
         );
         if (mounted) {
           setState(() {
@@ -1158,25 +1161,64 @@ class _InfoModule extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final genreLabel = game.genres.isNotEmpty
+        ? game.genres.take(3).join(' · ')
+        : (game.genre.isNotEmpty && game.genre != 'Varios' ? game.genre : null);
+
     return _ModuleCard(
       icon: Icons.info_outline_rounded,
       iconColor: _cyan,
       title: 'Información General',
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _InfoChip(label: 'Género', value: game.genre),
-          _InfoChip(label: 'Año', value: '${game.year}'),
-          _InfoChip(
-              label: 'Estado',
-              value: game.status.label,
-              valueColor: game.status.color),
-          if (game.rating != null)
-            _InfoChip(
-                label: 'Rating',
-                value: '★ ${game.rating!.toStringAsFixed(1)}',
-                valueColor: _yellow),
+          // Fila 1: chips principales
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _InfoChip(label: 'Plataforma', value: game.platform.displayName),
+              _InfoChip(label: 'Año', value: game.year > 0 ? '${game.year}' : 'N/D'),
+              _InfoChip(
+                  label: 'Estado',
+                  value: game.status.label,
+                  valueColor: game.status.color),
+              if (game.playtime > 0)
+                _InfoChip(label: 'Horas jugadas', value: '${game.playtime}h', valueColor: _cyan),
+              if (game.rating != null && game.rating! > 0)
+                _InfoChip(
+                    label: 'Rating',
+                    value: '★ ${game.rating!.toStringAsFixed(1)}',
+                    valueColor: _yellow),
+              if (game.metacritic != null && game.metacritic! > 0)
+                _InfoChip(
+                    label: 'Metacritic',
+                    value: '${game.metacritic}',
+                    valueColor: game.metacritic! >= 75
+                        ? const Color(0xFF4AF626)
+                        : game.metacritic! >= 50
+                            ? _yellow
+                            : const Color(0xFFFF4040)),
+              if (game.esrbRating != null)
+                _InfoChip(label: 'ESRB', value: game.esrbRating!),
+            ],
+          ),
+          // Géneros (si los hay)
+          if (genreLabel != null) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.label_rounded, size: 12, color: _textMuted),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    genreLabel,
+                    style: const TextStyle(fontSize: 11, color: _textSub),
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );

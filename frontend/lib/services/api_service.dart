@@ -54,6 +54,11 @@ class ApiGame {
   final String? pcRequirements;
   final List<String> rawgPlatforms; // Plataformas detectadas por RAWG
   final int? userPlaytime;
+  // Metadatos extras de RAWG
+  final int? releaseYear;
+  final List<String> genres;
+  final int? metacritic;
+  final String? esrbRating;
 
   const ApiGame({
     required this.id,
@@ -75,6 +80,10 @@ class ApiGame {
     this.pcRequirements,
     this.rawgPlatforms = const [],
     this.userPlaytime,
+    this.releaseYear,
+    this.genres = const [],
+    this.metacritic,
+    this.esrbRating,
   });
 
   factory ApiGame.fromJson(Map<String, dynamic> json) {
@@ -117,6 +126,10 @@ class ApiGame {
           : null,
       userPlaytime:     json['playtime'] != null ? (json['playtime'] as num).toInt() : null,
       rawgPlatforms:    List<String>.from(gameData['rawgPlatforms'] ?? []),
+      releaseYear:      (gameData['releaseYear'] as num?)?.toInt(),
+      genres:           List<String>.from(gameData['genres'] ?? []),
+      metacritic:       (gameData['metacritic'] as num?)?.toInt(),
+      esrbRating:       gameData['esrbRating']?.toString(),
     );
   }
 

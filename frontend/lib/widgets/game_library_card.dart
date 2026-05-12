@@ -84,12 +84,13 @@ class _GameLibraryCardState extends State<GameLibraryCard>
                 // ── Portada del juego ───────────────────────────────────────
                 _CoverImage(coverUrl: widget.game.cover),
 
-                // ── PC Req Dot — esquina superior derecha ───────────────────
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: PcReqDot(pcReq: widget.game.pcReq),
-                ),
+                // ── PC Req Dot — esquina superior derecha (solo para PC) ────
+                if (widget.game.platform.isPc)
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: PcReqDot(pcReq: widget.game.pcReq),
+                  ),
 
                 // ── Badge de estado — esquina superior izquierda ────────────
                 Positioned(
