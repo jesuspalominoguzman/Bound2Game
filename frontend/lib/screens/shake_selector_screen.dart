@@ -14,6 +14,9 @@ import 'package:google_fonts/google_fonts.dart';
 
 import '../models/game_model.dart';
 import '../widgets/advanced_filters_modal.dart';
+import '../services/api_service.dart';
+import '../services/auth_service.dart';
+import 'library_screen.dart'; // Para apiGameToLocal
 import 'game_detail_screen.dart';
 
 // ── Paleta del tema definitivo ─────────────────────────────────────────────────
@@ -42,6 +45,10 @@ class ShakeSelectorScreen extends StatefulWidget {
 class _ShakeSelectorScreenState extends State<ShakeSelectorScreen>
     with TickerProviderStateMixin {
 
+  // ── Library state ──────────────────────────────────────────────────────────
+  List<Game> _userLibrary = [];
+  bool _isLoadingLibrary = true;
+
   // ── Filter state ───────────────────────────────────────────────────────────
   LibraryFilters _filters = const LibraryFilters();
 
@@ -67,6 +74,33 @@ class _ShakeSelectorScreenState extends State<ShakeSelectorScreen>
     _spinAnim = CurvedAnimation(parent: _spinCtrl, curve: Curves.decelerate);
     _spinCtrl.addListener(_onSpinTick);
     _spinCtrl.addStatusListener(_onSpinStatus);
+    
+    _loadUserLibrary();
+  }
+
+  Future<void> _loadUserLibrary() async {
+    try {
+      final user = await AuthService.getCurrentUser();
+      if (user == null) {
+        if (mounted) setState(() => _isLoadingLibrary = false);
+        return;
+      }
+      
+      final apiGames = await ApiService.getLibrary(user.id);
+      final mappedGames = apiGames.map((g) => LibraryScreenState.apiGameToLocal(g)).toList();
+      
+      if (mounted) {
+        setState(() {
+          _userLibrary = mappedGames;
+          _isLoadingLibrary = false;
+        });
+      }
+    } catch (e) {
+      print("Error loading library for Shake to Play: $e");
+      if (mounted) {
+        setState(() => _isLoadingLibrary = false);
+      }
+    }
   }
 
   @override
@@ -77,12 +111,12 @@ class _ShakeSelectorScreenState extends State<ShakeSelectorScreen>
 
   // ── Filtered pool ──────────────────────────────────────────────────────────
   List<Game> get _filtered {
-    return _filters.apply(sampleGames);
+    return _filters.apply(_userLibrary);
   }
 
   // ── Unique genres in pool ──────────────────────────────────────────────────
   List<String> get _genres =>
-      sampleGames.map((g) => g.genre).toSet().toList()..sort();
+      _userLibrary.map((g) => g.genre).where((g) => g.isNotEmpty && g != 'Sin género').toSet().toList()..sort();
 
   // ── Configurar filtros (abre AdvancedFiltersModal) ─────────────────────────
   Future<void> _openFilters() async {
@@ -180,7 +214,12 @@ class _ShakeSelectorScreenState extends State<ShakeSelectorScreen>
       ),
       body: AnimatedSwitcher(
         duration: const Duration(milliseconds: 400),
-        child: _phase == _Phase.filters
+        child: _isLoadingLibrary 
+          ? const Center(
+              key: ValueKey('loading'),
+              child: CircularProgressIndicator(color: _kYellow, strokeWidth: 2),
+            )
+          : _phase == _Phase.filters
             ? _FiltersView(
                 key: const ValueKey('filters'),
                 poolCount: _filtered.length,

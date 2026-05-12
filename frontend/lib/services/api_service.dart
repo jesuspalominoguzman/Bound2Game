@@ -513,7 +513,7 @@ class ApiService {
   // ══════════════════════════════════════════════════════════════════════════
 
   /// GET /api/games/search?title=...
-  static Future<ApiGame> searchGame(String title) async {
+  static Future<List<ApiGame>> searchGame(String title) async {
     final uri = Uri.parse('$baseUrl/api/games/search')
         .replace(queryParameters: {'title': title});
 
@@ -521,7 +521,13 @@ class ApiService {
         .get(uri, headers: await _headers())
         .timeout(_timeout);
 
-    return ApiGame.fromJson(_parse(r));
+    if (r.statusCode >= 200 && r.statusCode < 300) {
+      final List<dynamic> data = jsonDecode(r.body);
+      return data.map((json) => ApiGame.fromJson(json as Map<String, dynamic>)).toList();
+    } else {
+      final body = jsonDecode(r.body) as Map<String, dynamic>? ?? {};
+      throw ApiException(body['error']?.toString() ?? 'Error ${r.statusCode}');
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════

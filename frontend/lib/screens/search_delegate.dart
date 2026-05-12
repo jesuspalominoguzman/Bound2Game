@@ -96,7 +96,7 @@ class _SearchResultsBodyState extends State<_SearchResultsBody> {
   Timer? _debounce;
   String _activeQuery = '';
   bool _isLoading = false;
-  Game? _result;
+  List<Game> _results = [];
   bool _notFound = false;
 
   @override
@@ -122,13 +122,14 @@ class _SearchResultsBodyState extends State<_SearchResultsBody> {
 
   Future<void> _doSearch(String q) async {
     if (!mounted) return;
-    setState(() { _activeQuery = q; _isLoading = true; _notFound = false; _result = null; });
+    setState(() { _activeQuery = q; _isLoading = true; _notFound = false; _results = []; });
     try {
-      final api = await ApiService.searchGame(q);
+      final apiGames = await ApiService.searchGame(q);
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _result = LibraryScreenState.apiGameToLocal(api);
+        _results = apiGames.map((api) => LibraryScreenState.apiGameToLocal(api)).toList();
+        if (_results.isEmpty) _notFound = true;
       });
     } catch (_) {
       if (!mounted) return;
@@ -150,22 +151,20 @@ class _SearchResultsBodyState extends State<_SearchResultsBody> {
         child: const Center(child: CircularProgressIndicator(color: _kYellow, strokeWidth: 2)),
       );
     }
-    if (_notFound || _result == null) {
+    if (_notFound || _results.isEmpty) {
       return _SearchNoResults(query: _activeQuery);
     }
-    final game = _result!;
+    
     return Container(
       color: _kBg,
       child: ListView(
         physics: const BouncingScrollPhysics(),
-        children: [
-          _SearchResultTile(
-            game: game,
-            onTap: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => GameDetailScreen(baseGame: game)),
-            ),
+        children: _results.map((game) => _SearchResultTile(
+          game: game,
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => GameDetailScreen(baseGame: game)),
           ),
-        ],
+        )).toList(),
       ),
     );
   }

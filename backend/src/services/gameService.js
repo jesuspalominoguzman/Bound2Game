@@ -34,31 +34,24 @@ const getRawgData = async (title) => {
         const apiKey = process.env.RAWG_API_KEY;
         if (!apiKey) {
             console.warn('RAWG_API_KEY no configurada. Saltando RAWG.');
-            return null;
+            return [];
         }
 
-        const url = `https://api.rawg.io/api/games?search=${encodeURIComponent(title)}&key=${apiKey}&page_size=1`;
+        const url = `https://api.rawg.io/api/games?search=${encodeURIComponent(title)}&key=${apiKey}&page_size=5`;
         const response = await axios.get(url, { timeout: 8000 });
-        
+
         if (!response.data || !response.data.results || response.data.results.length === 0) {
-            return null;
+            return [];
         }
 
-        const bestMatch = response.data.results[0];
-
-        console.log(`✅ RAWG encontró: '${bestMatch.name}' para búsqueda '${title}'`);
-
-        // Extraer slugs de plataforma (ej: 'pc', 'nintendo-switch', 'playstation-4')
-        const rawgPlatforms = (bestMatch.platforms || []).map(p => p.platform.slug);
-
-        return {
-            title: bestMatch.name,
-            imageUrl: bestMatch.background_image || '',
-            rawgPlatforms,
-        };
+        return response.data.results.map(match => ({
+            title: match.name,
+            imageUrl: match.background_image || '',
+            rawgPlatforms: (match.platforms || []).map(p => p.platform.slug),
+        }));
     } catch (error) {
         console.error('Error al consultar RAWG API:', error.message);
-        return null;
+        return [];
     }
 };
 
@@ -71,7 +64,7 @@ const getCheapSharkData = async (title) => {
     try {
         // Primera petición: Buscar el juego por título
         const searchResponse = await axios.get(`https://www.cheapshark.com/api/1.0/games?title=${encodeURIComponent(title)}`);
-        
+
         if (!searchResponse.data || searchResponse.data.length === 0) {
             return null;
         }
@@ -79,7 +72,7 @@ const getCheapSharkData = async (title) => {
         // Mejorar la búsqueda: intentar encontrar coincidencia exacta, 
         // o si no, el primer resultado que NO sea un DLC/Soundtrack
         let bestMatch = searchResponse.data.find(g => g.external.toLowerCase() === title.toLowerCase());
-        
+
         if (!bestMatch) {
             bestMatch = searchResponse.data.find(g => {
                 const name = g.external.toLowerCase();
@@ -122,7 +115,7 @@ const getCheapSharkData = async (title) => {
  */
 const getSteamRequirements = async (steamAppID) => {
     if (!steamAppID) return null;
-    
+
     try {
         const steamResponse = await axios.get(`https://store.steampowered.com/api/appdetails?appids=${steamAppID}`);
         const data = steamResponse.data[steamAppID];
@@ -150,7 +143,7 @@ const getSteamRequirements = async (steamAppID) => {
 const getHowLongToBeatData = async (title) => {
     try {
         const results = await hltbService.search(title);
-        
+
         if (results && results.length > 0) {
             // Tomamos el primer resultado
             const match = results[0];
@@ -165,8 +158,8 @@ const getHowLongToBeatData = async (title) => {
         // En caso de que falle, devolvemos un dato simulado para que el frontend pueda seguir trabajando.
         console.warn('⚠️ La librería de HowLongToBeat falló (posible cambio en su web). Usando dato simulado.');
         const fakeMain = Math.floor(Math.random() * (40 - 10 + 1) + 10);
-        return { 
-            main: fakeMain, 
+        return {
+            main: fakeMain,
             completionist: fakeMain * 2 + Math.floor(Math.random() * 20) // El 100% suele ser el doble + un poco más
         };
     }
@@ -233,7 +226,7 @@ const compareRequirements = (userPcComponents, gameRequirements) => {
     if (userRam >= recRam && recRam > 0) return "VERDE";
     if (userRam >= minRam && minRam > 0) return "AMARILLO";
     if (userRam < minRam) return "ROJO";
-    
+
     return "VERDE";
 };
 

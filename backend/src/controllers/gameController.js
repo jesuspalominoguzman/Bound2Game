@@ -79,116 +79,104 @@ const searchGame = async (req, res) => {
             return res.status(400).json({ error: 'El parámetro "title" es obligatorio.' });
         }
 
-        // --- 1. BUSCAR EN CACHÉ (MONGODB) ---
-        const cachedGame = await GameCache.findOne({ title: { $regex: new RegExp(title, 'i') } });
-
-        if (cachedGame) {
-            console.log(`⚡ Devolviendo '${cachedGame.title}' desde la caché de MongoDB`);
-            let modified = false;
-
-            // Parche: Si es un juego antiguo en caché que tiene SteamID pero no requisitos, actualizamos
-            if (cachedGame.steamAppID && (!cachedGame.pcRequirements || cachedGame.pcRequirements === 'No disponibles')) {
-                const steamReq = await gameService.getSteamRequirements(cachedGame.steamAppID);
-                if (steamReq) {
-                    cachedGame.pcRequirements = steamReq;
-                    modified = true;
-                }
-            }
-
-            // Parche: Si es un juego antiguo que no tiene rawgPlatforms, actualizamos
-            if (!cachedGame.rawgPlatforms || cachedGame.rawgPlatforms.length === 0) {
-                const baseData = await gameService.getRawgData(cachedGame.title);
-                if (baseData && baseData.rawgPlatforms && baseData.rawgPlatforms.length > 0) {
-                    cachedGame.rawgPlatforms = baseData.rawgPlatforms;
-                    modified = true;
-                    console.log(`🔧 Parcheando plataformas RAWG para '${cachedGame.title}'`);
-                }
-            }
-
-            if (modified) {
-                await cachedGame.save();
-            }
-
-            return res.json(cachedGame);
-        }
-
         console.log(`🌐 Buscando '${title}' en APIs externas...`);
 
-        // --- 2. CADENA DE BÚSQUEDA: RAWG → CheapShark → Steam → OpenCritic ---
-        let baseData = await gameService.getRawgData(title);
+        // --- 1. Obtener hasta 5 resultados básicos de RAWG ---
+        const rawgResults = await gameService.getRawgData(title);
         
-        // Si RAWG devuelve algo, usamos ese nombre limpio para las demás tiendas
-        const searchTitle = baseData ? baseData.title : title;
-
-        let gameData = await gameService.getCheapSharkData(searchTitle);
-
-        if (!gameData) {
-            console.log(`⚠️  CheapShark falló para '${searchTitle}', probando Steam...`);
-            gameData = await searchSteamFallback(searchTitle);
-        }
-
-        if (!gameData) {
-            console.log(`⚠️  Steam falló para '${searchTitle}', probando OpenCritic...`);
-            gameData = await searchOpenCriticFallback(searchTitle);
-        }
-
-        // --- Combinar resultados ---
-        if (!gameData && baseData) {
-            // Solo se encontró en RAWG (ej. Smash Bros)
-            gameData = {
-                title: baseData.title,
-                steamAppID: null,
-                imageUrl: baseData.imageUrl,
-                currentPrice: '0',
-                retailPrice: '0',
-                cheapestStore: 'N/A',
-                lowestPriceEver: '0',
-            };
-        } else if (gameData && baseData) {
-            // Combinar ambos: RAWG tiene mejor título y fondo
-            gameData.title = baseData.title;
-            if (baseData.imageUrl) {
-                gameData.imageUrl = baseData.imageUrl;
-            }
-        }
-
-        if (!gameData) {
+        // Si RAWG no devuelve nada, intentamos buscar en caché al menos
+        if (!rawgResults || rawgResults.length === 0) {
+            const cachedGames = await GameCache.find({ title: { $regex: new RegExp(title, 'i') } }).limit(5);
+            if (cachedGames.length > 0) return res.json(cachedGames);
             return res.status(404).json({ error: 'Juego no encontrado.' });
         }
 
-        let pcRequirements = null;
-        if (gameData.steamAppID) {
-            pcRequirements = await gameService.getSteamRequirements(gameData.steamAppID);
-        }
+        const finalResults = [];
 
-        const playtimeData = await gameService.getHowLongToBeatData(gameData.title);
+        // --- 2. Procesar los resultados de RAWG (en paralelo para mayor velocidad) ---
+        await Promise.all(rawgResults.map(async (baseData) => {
+            // Comprobar si ya está en caché por título exacto
+            let cachedGame = await GameCache.findOne({ title: baseData.title });
+            
+            if (cachedGame) {
+                // Parche: actualizar plataformas si faltan
+                if (!cachedGame.rawgPlatforms || cachedGame.rawgPlatforms.length === 0) {
+                    cachedGame.rawgPlatforms = baseData.rawgPlatforms;
+                    await cachedGame.save();
+                }
+                finalResults.push(cachedGame);
+                return;
+            }
 
-        // --- 3. CONSTRUIR EL OBJETO A GUARDAR ---
-        const newGameData = {
-            title: gameData.title,
-            steamAppID: gameData.steamAppID || null,
-            imageUrl: gameData.imageUrl || (gameData.steamAppID
-                ? `https://cdn.akamai.steamstatic.com/steam/apps/${gameData.steamAppID}/header.jpg`
-                : ''),
-            retailPrice: gameData.retailPrice,
-            currentPrice: gameData.currentPrice,
-            cheapestStore: gameData.cheapestStore,
-            lowestPriceEver: gameData.lowestPriceEver,
-            hltb: {
-                mainStory: playtimeData.main,
-                completionist: playtimeData.completionist
-            },
-            pcRequirements: pcRequirements || 'No disponibles',
-            rawgPlatforms: baseData?.rawgPlatforms || [],
-            lastPriceUpdate: new Date()
-        };
+            // Si no está en caché, buscamos datos adicionales (CheapShark, Steam, HLTB)
+            const searchTitle = baseData.title;
+            let gameData = await gameService.getCheapSharkData(searchTitle);
+            
+            if (!gameData) {
+                gameData = await searchSteamFallback(searchTitle);
+            }
+            if (!gameData) {
+                gameData = await searchOpenCriticFallback(searchTitle);
+            }
+            
+            if (!gameData) {
+                gameData = {
+                    title: baseData.title,
+                    steamAppID: null,
+                    imageUrl: baseData.imageUrl,
+                    currentPrice: '0',
+                    retailPrice: '0',
+                    cheapestStore: 'N/A',
+                    lowestPriceEver: '0',
+                };
+            } else {
+                gameData.title = baseData.title; // Forzar el título bonito de RAWG
+                if (baseData.imageUrl) {
+                    gameData.imageUrl = baseData.imageUrl;
+                }
+            }
 
-        // --- 4. GUARDAR EN MONGODB Y DEVOLVER ---
-        const newGame = new GameCache(newGameData);
-        await newGame.save();
+            let pcRequirements = null;
+            if (gameData.steamAppID) {
+                pcRequirements = await gameService.getSteamRequirements(gameData.steamAppID);
+            }
 
-        console.log(`✅ Juego '${newGame.title}' guardado en la caché de MongoDB`);
-        return res.json(newGame);
+            const playtimeData = await gameService.getHowLongToBeatData(gameData.title);
+
+            // Construir el objeto a guardar
+            const newGameData = {
+                title: gameData.title,
+                steamAppID: gameData.steamAppID || null,
+                imageUrl: gameData.imageUrl || (gameData.steamAppID
+                    ? `https://cdn.akamai.steamstatic.com/steam/apps/${gameData.steamAppID}/header.jpg`
+                    : ''),
+                retailPrice: gameData.retailPrice,
+                currentPrice: gameData.currentPrice,
+                cheapestStore: gameData.cheapestStore,
+                lowestPriceEver: gameData.lowestPriceEver,
+                hltb: {
+                    mainStory: playtimeData.main,
+                    completionist: playtimeData.completionist
+                },
+                pcRequirements: pcRequirements || 'No disponibles',
+                rawgPlatforms: baseData.rawgPlatforms || [],
+                lastPriceUpdate: new Date()
+            };
+
+            const newGame = new GameCache(newGameData);
+            await newGame.save();
+            console.log(`✅ Juego '${newGame.title}' guardado en la caché de MongoDB`);
+            finalResults.push(newGame);
+        }));
+
+        // Mantener el orden original de RAWG tanto como sea posible
+        finalResults.sort((a, b) => {
+            const indexA = rawgResults.findIndex(r => r.title === a.title);
+            const indexB = rawgResults.findIndex(r => r.title === b.title);
+            return indexA - indexB;
+        });
+
+        return res.json(finalResults);
 
     } catch (error) {
         console.error('Error en el controlador searchGame:', error);
