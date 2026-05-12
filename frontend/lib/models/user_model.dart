@@ -17,7 +17,11 @@ class User {
   final int karma;
   final Map<String, dynamic> pcComponents;
   final List<User> friends;
-  final bool isOnline; // Opcional, asumiremos true temporalmente si no viene
+  /// Títulos recientes de la biblioteca del amigo (max 5).
+  final List<String> recentGames;
+  /// URLs de portada de los juegos recientes (misma longitud que recentGames).
+  final List<String> recentGameCovers;
+  final bool isOnline;
 
   const User({
     required this.id,
@@ -28,6 +32,8 @@ class User {
     this.karma = 0,
     this.pcComponents = const {},
     this.friends = const [],
+    this.recentGames = const [],
+    this.recentGameCovers = const [],
     this.isOnline = true,
   });
 
@@ -53,6 +59,12 @@ class User {
       karma: (json['karma'] as num?)?.toInt() ?? 0,
       pcComponents: json['pcComponents'] as Map<String, dynamic>? ?? {},
       friends: friendsList,
+      recentGames: (json['recentGames'] as List<dynamic>? ?? [])
+          .map((g) => g.toString())
+          .toList(),
+      recentGameCovers: (json['recentGameCovers'] as List<dynamic>? ?? [])
+          .map((g) => g.toString())
+          .toList(),
       isOnline: json['isOnline'] as bool? ?? true,
     );
   }

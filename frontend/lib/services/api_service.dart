@@ -146,6 +146,29 @@ class ApiGame {
   }
 }
 
+/// Resultado ligero de búsqueda de usuarios.
+/// Solo contiene los campos necesarios para la UI del SearchDelegate.
+class UserSearchResult {
+  final String  id;
+  final String  username;
+  final String? avatarUrl;
+  final int     karma;
+
+  const UserSearchResult({
+    required this.id,
+    required this.username,
+    this.avatarUrl,
+    this.karma = 0,
+  });
+
+  factory UserSearchResult.fromJson(Map<String, dynamic> j) => UserSearchResult(
+    id:        j['_id']?.toString() ?? j['id']?.toString() ?? '',
+    username:  j['username']?.toString() ?? '',
+    avatarUrl: j['avatarUrl']?.toString(),
+    karma:     (j['karma'] as num?)?.toInt() ?? 0,
+  );
+}
+
 /// Estadísticas de la biblioteca del usuario
 class LibraryStats {
   final int total;
@@ -290,11 +313,23 @@ class ApiService {
   // ── Helper: parsear respuesta ─────────────────────────────────────────────
   static Map<String, dynamic> _parse(http.Response r) {
     if (r.statusCode >= 200 && r.statusCode < 300) {
-      return jsonDecode(r.body) as Map<String, dynamic>;
+      try {
+        return jsonDecode(r.body) as Map<String, dynamic>;
+      } catch (_) {
+        throw ApiException('Respuesta inesperada del servidor', statusCode: r.statusCode);
+      }
     }
-    final body = jsonDecode(r.body) as Map<String, dynamic>? ?? {};
-    final msg  = body['error']?.toString() ?? 'Error ${r.statusCode}';
-    throw ApiException(msg, statusCode: r.statusCode);
+    // Intentar parsear JSON del error; si es HTML (ej. 404 de nginx) capturar y crear mensaje claro
+    try {
+      final body = jsonDecode(r.body) as Map<String, dynamic>? ?? {};
+      final msg  = body['error']?.toString() ?? 'Error ${r.statusCode}';
+      throw ApiException(msg, statusCode: r.statusCode);
+    } catch (e) {
+      if (e is ApiException) rethrow;
+      // El body no era JSON (era HTML) — dar mensaje genérico con el código
+      throw ApiException('Error del servidor (${r.statusCode}). Comprueba que el backend está activo.',
+          statusCode: r.statusCode);
+    }
   }
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -400,6 +435,85 @@ class ApiService {
       print('[ApiService] Error fetching friends: $e');
       rethrow;
     }
+  }
+
+  /// GET /api/users/pending-requests — Solicitudes de amistad entrantes
+  static Future<List<UserSearchResult>> getPendingRequests() async {
+    final r = await http
+        .get(Uri.parse('$baseUrl/api/users/pending-requests'),
+             headers: await _headers(withAuth: true))
+        .timeout(_timeout);
+    final data = _parse(r);
+    final list = data['pendingRequests'] as List? ?? [];
+    return list
+        .map((j) => UserSearchResult.fromJson(j as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// GET /api/users/search?q=... — Buscar usuarios en la BD (regex insensible)
+  static Future<List<UserSearchResult>> searchUsers(String q) async {
+    if (q.isEmpty) return [];
+    final uri = Uri.parse('$baseUrl/api/users/search')
+        .replace(queryParameters: {'q': q});
+    final r = await http
+        .get(uri, headers: await _headers(withAuth: true))
+        .timeout(_timeout);
+    final data = _parse(r);
+    final users = data['users'] as List? ?? [];
+    return users
+        .map((j) => UserSearchResult.fromJson(j as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// POST /api/users/friend-request — Enviar o aceptar solicitud de amistad
+  /// Devuelve el estado resultante: 'pending' | 'accepted' | 'friends'
+  static Future<String> sendFriendRequest(String targetId) async {
+    final r = await http
+        .post(
+          Uri.parse('$baseUrl/api/users/friend-request'),
+          headers: await _headers(withAuth: true),
+          body: jsonEncode({'targetId': targetId}),
+        )
+        .timeout(_timeout);
+    // 409 puede ser un estado válido (ya amigos / ya pendiente), no lo lanzamos
+    if (r.statusCode == 409) {
+      final body = jsonDecode(r.body) as Map<String, dynamic>;
+      return body['status']?.toString() ?? 'error';
+    }
+    final data = _parse(r);
+    return data['status']?.toString() ?? 'pending';
+  }
+
+  /// GET /api/users/:friendId/library-public — Biblioteca pública de un amigo
+  static Future<List<ApiGame>> getFriendLibrary(String friendId) async {
+    final r = await http
+        .get(
+          Uri.parse('$baseUrl/api/users/$friendId/library-public'),
+          headers: await _headers(withAuth: true),
+        )
+        .timeout(_timeout);
+    final data    = _parse(r);
+    final entries = (data['library'] as List?) ?? [];
+    return entries
+        .map((e) => ApiGame.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// GET /api/users/:userId/library-preview — Vista previa sin requerir amistad.
+  /// Permite ver los juegos de un usuario antes de añadirlo como amigo.
+  static Future<List<ApiGame>> getUserLibraryPreview(String userId) async {
+    if (userId.isEmpty) return [];
+    final r = await http
+        .get(
+          Uri.parse('$baseUrl/api/users/$userId/library-preview'),
+          headers: await _headers(withAuth: true),
+        )
+        .timeout(_timeout);
+    final data    = _parse(r);
+    final entries = (data['library'] as List?) ?? [];
+    return entries
+        .map((e) => ApiGame.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   // ══════════════════════════════════════════════════════════════════════════

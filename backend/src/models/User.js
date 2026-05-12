@@ -66,6 +66,11 @@ const userSchema = new mongoose.Schema({
     friends: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
+    }],
+    // IDs de usuarios que han enviado una solicitud de amistad y aún no ha sido aceptada
+    pendingRequests: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
     }]
 }, {
     timestamps: true
