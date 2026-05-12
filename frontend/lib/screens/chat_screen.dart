@@ -42,7 +42,6 @@ const _green    = Color(0xFF39FF7E);
 // =============================================================================
 
 /// Modelo de mensaje de chat con timestamp.
-/// TODO(backend): Persistencia efímera en Redis/TTL 24h.
 class ChatMessage {
   final String id;
   final String text;
@@ -161,7 +160,7 @@ class _ChatScreenState extends State<ChatScreen> {
       text: data['content'] as String,
       isMe: isMe,
       timestamp:
-          DateTime.tryParse(data['createdAt']?.toString() ?? '') ??
+          DateTime.tryParse(data['createdAt']?.toString() ?? '')?.toLocal() ??
           DateTime.now(),
       type: type,
     );

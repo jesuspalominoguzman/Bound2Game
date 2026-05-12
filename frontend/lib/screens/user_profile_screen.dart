@@ -1,16 +1,9 @@
-// =============================================================================
-// user_profile_screen.dart — Bound2Game Flutter
-//
-// Pantalla de perfil público de un usuario.
-// Muestra avatar, karma, juegos recientes y botón "Ver biblioteca completa".
-// Paleta: negro (#1A1A1A) + amarillo (#FFB800)
-// =============================================================================
-
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
-import '../models/game_model.dart' hide User;
+import '../models/game_model.dart' as gm;
 import '../services/api_service.dart';
-import 'friend_library_screen.dart';
+import 'package:flutter/services.dart';
+import 'package:palette_generator/palette_generator.dart';
 import 'game_detail_screen.dart';
 
 // ── Paleta ────────────────────────────────────────────────────────────────────
@@ -22,234 +15,500 @@ const _yellow   = Color(0xFFFFB800);
 const _yellowDim = Color(0x33FFB800);
 const _textMain = Colors.white;
 const _textSub  = Color(0xFF888888);
+const _cyan      = Color(0xFF00E5FF);
+
+// Colores de plataformas
+const _colorDiscord  = Color(0xFF5865F2);
+const _colorSteam    = Color(0xFF1B2838);
+const _colorSteamTxt = Color(0xFF66C0F4);
+const _colorEpic     = Color(0xFF2A2A2A);
+const _colorXbox     = Color(0xFF107C10);
 
 // =============================================================================
-// Pantalla principal
+// Pantalla principal de Perfil
 // =============================================================================
 
 class UserProfileScreen extends StatefulWidget {
+  final User user; // Trae datos básicos desde la búsqueda o lista de amigos
   const UserProfileScreen({super.key, required this.user});
-  final User user;
 
   @override
   State<UserProfileScreen> createState() => _UserProfileScreenState();
 }
 
 class _UserProfileScreenState extends State<UserProfileScreen> {
-  late Future<List<ApiGame>> _previewFuture;
+  late Future<User> _profileFuture;
+  late Future<List<ApiGame>> _libraryFuture;
+  Color _dominantColor = _yellow;
 
   @override
   void initState() {
     super.initState();
-    _previewFuture = ApiService.getUserLibraryPreview(widget.user.id);
+    // Cargar perfil completo (Karma, Amigos, PC, Steam ID)
+    _profileFuture = ApiService.getUserProfilePublic(widget.user.id).then((u) {
+      _updatePalette(u.avatarUrl);
+      return u;
+    });
+    // Cargar biblioteca (Intenta cargar completa, si no son amigos fallback a preview)
+    _libraryFuture = _loadLibrary();
+  }
+
+  Future<void> _updatePalette(String? url) async {
+    if (url == null || url.isEmpty) return;
+    try {
+      final palette = await PaletteGenerator.fromImageProvider(NetworkImage(url));
+      if (mounted) {
+        setState(() {
+          _dominantColor = palette.dominantColor?.color ?? _yellow;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<List<ApiGame>> _loadLibrary() async {
+    try {
+      return await ApiService.getFriendLibrary(widget.user.id);
+    } catch (e) {
+      // Fallback si no son amigos o hay error de permisos
+      return await ApiService.getUserLibraryPreview(widget.user.id);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final u = widget.user;
-
     return Scaffold(
       backgroundColor: _bg,
-      body: CustomScrollView(
-        physics: const BouncingScrollPhysics(),
-        slivers: [
-          // ── AppBar con avatar grande ─────────────────────────────────────
-          SliverAppBar(
-            expandedHeight: 220,
-            pinned: true,
-            backgroundColor: _bg,
-            elevation: 0,
-            leading: IconButton(
-              icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _textMain, size: 20),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            flexibleSpace: FlexibleSpaceBar(
-              background: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      _yellow.withValues(alpha: 0.15),
-                      _bg,
-                    ],
+      body: FutureBuilder<User>(
+        future: _profileFuture,
+        builder: (context, snapshot) {
+          // Usamos el usuario original hasta que cargue el completo para mantener la UI fluida
+          final u = snapshot.data ?? widget.user;
+          final isLoadingProfile = snapshot.connectionState == ConnectionState.waiting;
+
+          return CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              // ── Top Gradient y Avatar ──────────────────────────────────────
+              _buildAppBar(u),
+
+              // ── Indicador de carga si está buscando datos ──────────────────
+              if (isLoadingProfile)
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.all(24.0),
+                    child: Center(child: CircularProgressIndicator(color: _yellow)),
+                  ),
+                )
+              else ...[
+                // ── Bio ──────────────────────────────────────────────────────
+                if (u.bio != null && u.bio!.isNotEmpty) _buildBio(u.bio!),
+
+                // ── Estadísticas rápidas (Amigos, Karma) ─────────────────────
+                _buildStats(u),
+
+                // ── Plataformas ──────────────────────────────────────────────
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(20, 24, 20, 12),
+                    child: Text('Plataformas Vinculadas', style: TextStyle(color: _textMain, fontSize: 16, fontWeight: FontWeight.w700)),
                   ),
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    // Avatar
-                    Container(
-                      width: 88,
-                      height: 88,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: u.avatarBgColor,
-                        border: Border.all(color: _yellow, width: 3),
-                        boxShadow: [
-                          BoxShadow(color: _yellow.withValues(alpha: 0.3), blurRadius: 20, spreadRadius: 2),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Column(
+                      children: [
+                        _PlatformCard(
+                          platform: 'Steam',
+                          nickname: u.steamId ?? '',
+                          bgColor: _colorSteam,
+                          iconColor: _colorSteamTxt,
+                          icon: Icons.videogame_asset,
+                          isOwnProfile: false,
+                        ),
+                        const SizedBox(height: 10),
+                        _PlatformCard(
+                          platform: 'Epic Games',
+                          nickname: u.epicId ?? '',
+                          bgColor: _colorEpic,
+                          iconColor: Colors.white,
+                          icon: Icons.games_rounded,
+                          isOwnProfile: false,
+                        ),
+                        const SizedBox(height: 10),
+                        _PlatformCard(
+                          platform: 'Xbox Live',
+                          nickname: u.xboxId ?? '',
+                          bgColor: _colorXbox.withValues(alpha: 0.15),
+                          iconColor: _colorXbox,
+                          icon: Icons.gamepad_rounded,
+                          isOwnProfile: false,
+                        ),
+                        const SizedBox(height: 10),
+                        _PlatformCard(
+                          platform: 'Discord',
+                          nickname: u.discordId ?? '',
+                          bgColor: _colorDiscord.withValues(alpha: 0.15),
+                          iconColor: _colorDiscord,
+                          icon: Icons.discord,
+                          isOwnProfile: false,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // ── Mi Equipo (PC) ───────────────────────────────────────────
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(20, 24, 20, 12),
+                    child: Text('Mi Equipo (PC)', style: TextStyle(color: _textMain, fontSize: 16, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: _PcSpecsGrid(specs: u.pcComponents),
+                  ),
+                ),
+
+                // ── Separador ────────────────────────────────────────────────
+                const SliverToBoxAdapter(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    child: Divider(color: _border),
+                  ),
+                ),
+
+                // ── Juegos ───────────────────────────────────────────────────
+                FutureBuilder<List<ApiGame>>(
+                  future: _libraryFuture,
+                  builder: (ctx, snap) {
+                    if (snap.connectionState == ConnectionState.waiting) {
+                      return const SliverToBoxAdapter(
+                        child: Center(child: Padding(
+                          padding: EdgeInsets.all(32),
+                          child: CircularProgressIndicator(color: _yellow),
+                        )),
+                      );
+                    }
+
+                    final games = snap.data ?? [];
+                    if (games.isEmpty) return _buildEmptyLibrary(u);
+
+                    // Ordenar por playtime (si existe) de mayor a menor
+                    final sortedGames = List<ApiGame>.from(games);
+                    sortedGames.sort((a, b) => (b.userPlaytime ?? 0).compareTo(a.userPlaytime ?? 0));
+
+                    final topGames = sortedGames.take(4).toList();
+                    final restGames = sortedGames.skip(4).toList();
+
+                    return SliverList(
+                      delegate: SliverChildListDelegate([
+                        // Título "Más jugados"
+                        const Padding(
+                          padding: EdgeInsets.fromLTRB(20, 0, 20, 12),
+                          child: Text('Más jugados',
+                              style: TextStyle(color: _textMain, fontSize: 16, fontWeight: FontWeight.w700)),
+                        ),
+                        // Grid de 4 juegos
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 20),
+                          child: GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 2,
+                              mainAxisSpacing: 10,
+                              crossAxisSpacing: 10,
+                              childAspectRatio: 0.75,
+                            ),
+                            itemCount: topGames.length,
+                            itemBuilder: (ctx, i) => _GameCover(game: topGames[i]),
+                          ),
+                        ),
+
+                        // Acordeón con el resto de juegos
+                        if (restGames.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          _buildGamesAccordion(restGames),
+                        ],
+                        
+                        const SizedBox(height: 80), // Margen inferior
+                      ]),
+                    );
+                  },
+                ),
+              ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  // ── Widgets Extractos ──────────────────────────────────────────────────────
+
+  Widget _buildAppBar(User u) {
+    return SliverAppBar(
+      expandedHeight: 240,
+      pinned: true,
+      stretch: true,
+      backgroundColor: _bg,
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _textMain, size: 20),
+        onPressed: () => Navigator.of(context).pop(),
+      ),
+      flexibleSpace: LayoutBuilder(
+        builder: (ctx, constraints) {
+          final top = constraints.biggest.height;
+          // Cálculo de opacidad: desaparece por completo al llegar a kToolbarHeight
+          final opacity = ((top - kToolbarHeight) / (240 - kToolbarHeight)).clamp(0.0, 1.0);
+
+          return FlexibleSpaceBar(
+            stretchModes: const [StretchMode.zoomBackground],
+            collapseMode: CollapseMode.parallax,
+            background: Opacity(
+              opacity: opacity,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Fondo dinámico
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 500),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          _dominantColor.withValues(alpha: 0.4),
+                          _bg,
                         ],
                       ),
-                      child: u.avatarUrl != null && u.avatarUrl!.isNotEmpty
-                          ? ClipOval(child: Image.network(u.avatarUrl!, fit: BoxFit.cover))
-                          : Center(child: Text(u.initials,
-                              style: const TextStyle(color: Colors.black, fontSize: 28, fontWeight: FontWeight.w800))),
                     ),
-                    const SizedBox(height: 12),
-                    Text(u.username,
-                      style: const TextStyle(color: _textMain, fontSize: 22, fontWeight: FontWeight.w800)),
-                    const SizedBox(height: 6),
-                    // Karma badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                      decoration: BoxDecoration(
-                        color: _yellowDim,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: _yellow.withValues(alpha: 0.4)),
-                      ),
-                      child: Row(mainAxisSize: MainAxisSize.min, children: [
-                        const Icon(Icons.star_rounded, color: _yellow, size: 14),
-                        const SizedBox(width: 5),
-                        Text('${u.karma} karma',
-                          style: const TextStyle(color: _yellow, fontSize: 12, fontWeight: FontWeight.w700)),
-                      ]),
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                ),
-              ),
-            ),
-          ),
-
-          // ── Bio (si existe) ──────────────────────────────────────────────
-          if (u.bio != null && u.bio!.isNotEmpty)
-            SliverToBoxAdapter(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-                child: Container(
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: _bgCard,
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: _border),
                   ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.format_quote_rounded, color: _yellow, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(u.bio!,
-                        style: const TextStyle(color: _textSub, fontSize: 13, height: 1.5))),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-          const SliverToBoxAdapter(child: SizedBox(height: 24)),
-
-          // ── Sección: juegos recientes ─────────────────────────────────────
-          SliverToBoxAdapter(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Juegos recientes',
-                    style: TextStyle(color: _textMain, fontSize: 16, fontWeight: FontWeight.w700)),
-                  GestureDetector(
-                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => FriendLibraryScreen(friend: widget.user),
-                    )),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _yellow,
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: const Row(mainAxisSize: MainAxisSize.min, children: [
-                        Text('Ver biblioteca', style: TextStyle(
-                          color: Colors.black, fontSize: 12, fontWeight: FontWeight.w800)),
-                        SizedBox(width: 4),
-                        Icon(Icons.arrow_forward_rounded, color: Colors.black, size: 14),
-                      ]),
+                  // Avatar y Nombre
+                  Positioned(
+                    bottom: 20,
+                    left: 0,
+                    right: 0,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Avatar
+                        Container(
+                          width: 90,
+                          height: 90,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: u.avatarBgColor,
+                            border: Border.all(color: _dominantColor, width: 3),
+                            boxShadow: [
+                              BoxShadow(color: _dominantColor.withValues(alpha: 0.2), blurRadius: 20, spreadRadius: 5),
+                            ],
+                          ),
+                          child: u.avatarUrl != null && u.avatarUrl!.isNotEmpty
+                              ? ClipOval(child: Image.network(u.avatarUrl!, fit: BoxFit.cover))
+                              : Center(child: Text(u.initials,
+                                  style: const TextStyle(color: Colors.black, fontSize: 30, fontWeight: FontWeight.w900))),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(u.username,
+                                style: const TextStyle(color: _textMain, fontSize: 24, fontWeight: FontWeight.w900, letterSpacing: -0.5)),
+                            if (u.isOnline) ...[
+                              const SizedBox(width: 8),
+                              Container(width: 10, height: 10, decoration: const BoxDecoration(color: Color(0xFF4AF626), shape: BoxShape.circle)),
+                            ]
+                          ],
+                        ),
+                      ],
                     ),
                   ),
                 ],
               ),
             ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildBio(String bio) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: _bgCard,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _border),
           ),
-
-          // ── Grid de portadas o lista de juegos ────────────────────────────
-          SliverToBoxAdapter(
-            child: FutureBuilder<List<ApiGame>>(
-              future: _previewFuture,
-              builder: (ctx, snap) {
-                if (snap.connectionState == ConnectionState.waiting) {
-                  return const Padding(
-                    padding: EdgeInsets.all(32),
-                    child: Center(child: CircularProgressIndicator(color: _yellow, strokeWidth: 2)),
-                  );
-                }
-
-                final games = snap.data ?? [];
-
-                if (games.isEmpty) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                    child: Container(
-                      padding: const EdgeInsets.all(24),
-                      decoration: BoxDecoration(
-                        color: _bgCard,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: _border),
-                      ),
-                      child: Column(children: [
-                        const Icon(Icons.videogame_asset_off_rounded, color: _textSub, size: 36),
-                        const SizedBox(height: 12),
-                        Text('${u.username} no tiene juegos en su biblioteca',
-                          style: const TextStyle(color: _textSub, fontSize: 13),
-                          textAlign: TextAlign.center),
-                      ]),
-                    ),
-                  );
-                }
-
-                // Mostrar hasta 4 carátulas en grid 2×2
-                final preview = games.take(4).toList();
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 10,
-                      crossAxisSpacing: 10,
-                      childAspectRatio: 0.75,
-                    ),
-                    itemCount: preview.length,
-                    itemBuilder: (ctx, i) => _GameCover(game: preview[i]),
-                  ),
-                );
-              },
-            ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.format_quote_rounded, color: _yellow, size: 18),
+              const SizedBox(width: 8),
+              Expanded(child: Text(bio, style: const TextStyle(color: _textSub, fontSize: 13, height: 1.5))),
+            ],
           ),
+        ),
+      ),
+    );
+  }
 
-          const SliverToBoxAdapter(child: SizedBox(height: 100)),
-        ],
+  Widget _buildStats(User u) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _StatWidget(label: 'AMIGOS', value: '${u.friendsCount}', icon: Icons.group_rounded),
+            _StatWidget(label: 'KARMA', value: '${u.karma}', icon: Icons.star_rounded, isHighlighted: true),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // _buildStats se mantiene
+
+
+  Widget _buildEmptyLibrary(User u) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: _bgCard,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: _border),
+          ),
+          child: Column(children: [
+            const Icon(Icons.videogame_asset_off_rounded, color: _textSub, size: 36),
+            const SizedBox(height: 12),
+            Text('${u.username} no tiene juegos públicos',
+                style: const TextStyle(color: _textSub, fontSize: 13), textAlign: TextAlign.center),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGamesAccordion(List<ApiGame> games) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: Container(
+          decoration: BoxDecoration(
+            color: _bgCard,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: _border),
+          ),
+          child: ExpansionTile(
+            collapsedIconColor: _yellow,
+            iconColor: _yellow,
+            title: Text('Ver todos los juegos (${games.length})', 
+                style: const TextStyle(color: _textMain, fontSize: 14, fontWeight: FontWeight.w600)),
+            children: games.map((g) => _GameListTile(game: g)).toList(),
+          ),
+        ),
       ),
     );
   }
 }
 
 // =============================================================================
-// Portada de juego en el grid
+// Widgets Secundarios
 // =============================================================================
 
-class _GameCover extends StatefulWidget {
-  const _GameCover({required this.game});
+class _StatWidget extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final bool isHighlighted;
+
+  const _StatWidget({required this.label, required this.value, required this.icon, this.isHighlighted = false});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      decoration: BoxDecoration(
+        color: _bgCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isHighlighted ? _yellow.withValues(alpha: 0.3) : _border),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Icon(icon, color: isHighlighted ? _yellow : _textSub, size: 16),
+              const SizedBox(width: 6),
+              Text(value, style: TextStyle(color: isHighlighted ? _yellow : _textMain, fontSize: 18, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(color: _textSub, fontSize: 10, letterSpacing: 1.2)),
+        ],
+      ),
+    );
+  }
+}
+
+// Widget eliminado, usamos _PcSpecsGrid
+
+
+class _GameListTile extends StatelessWidget {
   final ApiGame game;
+  const _GameListTile({required this.game});
+
+  void _open(BuildContext context) {
+    final g = gm.Game(
+      id:       game.id.hashCode,
+      entryId:  game.entryId,
+      title:    game.title,
+      platform: gm.Platform.steam,
+      genre:    '',
+      playtime: game.userPlaytime ?? 0,
+      status:   gm.GameStatus.unplayed,
+      cover:    game.imageUrl,
+      pcReq:    gm.PcReq.yellow,
+      hasCosmetics: false,
+      price:    double.tryParse(game.currentPrice ?? '0') ?? 0,
+      year:     0,
+    );
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameDetailScreen(baseGame: g)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      onTap: () => _open(context),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: Image.network(game.imageUrl, width: 40, height: 40, fit: BoxFit.cover, errorBuilder: (_,__,___) => Container(width: 40, height: 40, color: _bgCard2)),
+      ),
+      title: Text(game.title, style: const TextStyle(color: _textMain, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+      subtitle: game.userPlaytime != null && game.userPlaytime! > 0
+          ? Text('${game.userPlaytime} horas', style: const TextStyle(color: _yellow, fontSize: 12))
+          : const Text('Sin horas registradas', style: TextStyle(color: _textSub, fontSize: 12)),
+      trailing: const Icon(Icons.chevron_right_rounded, color: _textSub, size: 20),
+    );
+  }
+}
+
+class _GameCover extends StatefulWidget {
+  final ApiGame game;
+  const _GameCover({required this.game});
 
   @override
   State<_GameCover> createState() => _GameCoverState();
@@ -259,22 +518,19 @@ class _GameCoverState extends State<_GameCover> {
   bool _pressed = false;
 
   void _open() {
-    final g = Game(
+    final g = gm.Game(
       id:       widget.game.id.hashCode,
       entryId:  widget.game.entryId,
       title:    widget.game.title,
-      platform: Platform.steam,
+      platform: gm.Platform.steam,
       genre:    '',
-      playtime: 0,
-      status:   GameStatus.unplayed,
-      cover:    widget.game.coverUrl,
-      pcReq:    PcReq.yellow,
+      playtime: widget.game.userPlaytime ?? 0,
+      status:   gm.GameStatus.unplayed,
+      cover:    widget.game.imageUrl,
+      pcReq:    gm.PcReq.yellow,
       hasCosmetics: false,
       price:    double.tryParse(widget.game.currentPrice ?? '0') ?? 0,
       year:     0,
-      hltb: widget.game.hltbMainStory != null
-          ? HltbTimes(main: widget.game.hltbMainStory!.toInt())
-          : null,
     );
     Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameDetailScreen(baseGame: g)));
   }
@@ -307,7 +563,7 @@ class _GameCoverState extends State<_GameCover> {
             fit: StackFit.expand,
             children: [
               Image.network(
-                widget.game.coverUrl,
+                widget.game.imageUrl,
                 fit: BoxFit.cover,
                 errorBuilder: (_, _, _) => Container(
                   color: _bgCard2,
@@ -326,7 +582,7 @@ class _GameCoverState extends State<_GameCover> {
                   )),
                 ),
               ),
-              // Gradiente inferior con título
+              // Gradiente inferior con título y horas
               Positioned(
                 bottom: 0, left: 0, right: 0,
                 child: Container(
@@ -338,13 +594,163 @@ class _GameCoverState extends State<_GameCover> {
                       colors: [Colors.black, Colors.transparent],
                     ),
                   ),
-                  child: Text(widget.game.title,
-                    style: const TextStyle(color: _textMain, fontSize: 11, fontWeight: FontWeight.w700),
-                    maxLines: 2, overflow: TextOverflow.ellipsis),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(widget.game.title,
+                        style: const TextStyle(color: _textMain, fontSize: 11, fontWeight: FontWeight.w700),
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                      if (widget.game.userPlaytime != null && widget.game.userPlaytime! > 0)
+                        Text('${widget.game.userPlaytime}h', style: const TextStyle(color: _yellow, fontSize: 10, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
                 ),
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Reutilizados de profile_screen.dart
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _PcSpecsGrid extends StatelessWidget {
+  const _PcSpecsGrid({required this.specs});
+  final Map<String, dynamic> specs;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _bgCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _border),
+      ),
+      child: Column(
+        children: [
+          _PcSpecRow(icon: Icons.memory_rounded, label: 'CPU', value: specs['cpu']?.toString() ?? '-'),
+          const Divider(color: _border, height: 24),
+          _PcSpecRow(icon: Icons.developer_board_rounded, label: 'GPU', value: specs['gpu']?.toString() ?? '-'),
+          const Divider(color: _border, height: 24),
+          _PcSpecRow(icon: Icons.sd_storage_rounded, label: 'RAM', value: '${specs['ram'] ?? '-'} GB'),
+          const Divider(color: _border, height: 24),
+          _PcSpecRow(icon: Icons.storage_rounded, label: 'Storage', value: specs['storage']?.toString() ?? '-'),
+        ],
+      ),
+    );
+  }
+}
+
+class _PcSpecRow extends StatelessWidget {
+  const _PcSpecRow({required this.icon, required this.label, required this.value});
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: _cyan),
+        const SizedBox(width: 12),
+        SizedBox(
+          width: 60,
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: _textSub, fontWeight: FontWeight.w600),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value == '-' || value.isEmpty ? 'No especificado' : value,
+            style: const TextStyle(fontSize: 13, color: _textMain, fontWeight: FontWeight.w500),
+            textAlign: TextAlign.right,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PlatformCard extends StatelessWidget {
+  const _PlatformCard({
+    required this.platform,
+    required this.nickname,
+    required this.bgColor,
+    required this.iconColor,
+    required this.icon,
+    required this.isOwnProfile,
+  });
+
+  final String platform;
+  final String nickname;
+  final Color bgColor;
+  final Color iconColor;
+  final IconData icon;
+  final bool isOwnProfile;
+
+  void _handleTap(BuildContext context) {
+    Clipboard.setData(ClipboardData(text: nickname));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('ID copiado al portapapeles'),
+        backgroundColor: _bgCard,
+        behavior: SnackBarBehavior.floating,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () => _handleTap(context),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _border),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: iconColor, size: 22),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    platform,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: iconColor.withValues(alpha: 0.8),
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    nickname.isEmpty ? 'Aún no especificado' : nickname,
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: nickname.isEmpty ? _textSub : Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              isOwnProfile ? Icons.edit_rounded : Icons.copy_rounded,
+              size: 18,
+              color: isOwnProfile ? _textSub : iconColor.withValues(alpha: 0.8),
+            ),
+          ],
         ),
       ),
     );

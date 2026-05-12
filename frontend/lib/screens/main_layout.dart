@@ -18,6 +18,8 @@ import '../screens/profile_screen.dart';
 import '../screens/search_delegate.dart';
 import '../screens/settings_screen.dart';
 import '../widgets/dynamic_appbar_title.dart';
+import '../services/auth_service.dart';
+import '../services/presence_service.dart';
 
 // ── Paleta definitiva ─────────────────────────────────────────────────────────
 const _kBgPage   = Color(0xFF292929); // Fondo de la página
@@ -50,6 +52,7 @@ class _NavItem {
 
 final GlobalKey<LibraryScreenState> libraryKey = GlobalKey<LibraryScreenState>();
 final GlobalKey<DashboardScreenState> dashboardKey = GlobalKey<DashboardScreenState>();
+final GlobalKey<ProfileScreenState> profileKey = GlobalKey<ProfileScreenState>();
 
 List<_NavItem> _buildNavItems(ValueChanged<int> onNavigate) => [
   _NavItem(
@@ -76,11 +79,11 @@ List<_NavItem> _buildNavItems(ValueChanged<int> onNavigate) => [
     activeIcon: Icons.people_rounded,
     screen: SocialScreen(),
   ),
-  const _NavItem(
+  _NavItem(
     label: 'Perfil',
     icon: Icons.person_outline_rounded,
     activeIcon: Icons.person_rounded,
-    screen: ProfileScreen(isOwnProfile: true),
+    screen: ProfileScreen(key: profileKey, isOwnProfile: true),
   ),
 ];
 
@@ -96,7 +99,7 @@ class MainLayout extends StatefulWidget {
 }
 
 class _MainLayoutState extends State<MainLayout>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   int _selectedIndex = 0;
 
   late final List<_NavItem> _navItems;
@@ -111,6 +114,38 @@ class _MainLayoutState extends State<MainLayout>
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
     ));
+
+    // Registrar observer del ciclo de vida y conectar presencia
+    WidgetsBinding.instance.addObserver(this);
+    _initPresence();
+  }
+
+
+
+  Future<void> _initPresence() async {
+    final session = await AuthService.loadSession();
+    if (session != null) {
+      PresenceService.instance.init(session.user.id);
+      PresenceService.instance.connect();
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    switch (state) {
+      case AppLifecycleState.resumed:
+        // App vuelve a primer plano → reconectar y notificar presencia
+        PresenceService.instance.connect();
+        break;
+      case AppLifecycleState.paused:
+      case AppLifecycleState.detached:
+      case AppLifecycleState.hidden:
+        // App va a segundo plano / se cierra → desconectar
+        PresenceService.instance.disconnect();
+        break;
+      case AppLifecycleState.inactive:
+        break;
+    }
   }
 
   void _onTabSelected(int index) {
@@ -134,6 +169,13 @@ class _MainLayoutState extends State<MainLayout>
     } else if (index == 1) {
       libraryKey.currentState?.reloadLibrary();
     }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    PresenceService.instance.disconnect();
+    super.dispose();
   }
 
   String get _currentPageName => _navItems[_selectedIndex].label;
@@ -165,10 +207,14 @@ class _MainLayoutState extends State<MainLayout>
         // Botón de ajustes en amarillo #FFB800
         IconButton(
           icon: const Icon(Icons.settings_rounded, color: _kYellow, size: 24),
-          onPressed: () {
-            Navigator.of(context).push(
+          onPressed: () async {
+            await Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SettingsScreen()),
             );
+            // Si estábamos en la pestaña Perfil, recargamos
+            if (_selectedIndex == 4) {
+              profileKey.currentState?.refresh();
+            }
           },
         ),
         const SizedBox(width: 4),

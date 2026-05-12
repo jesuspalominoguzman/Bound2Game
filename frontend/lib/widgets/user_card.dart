@@ -26,14 +26,10 @@ class UserCard extends StatefulWidget {
     super.key,
     required this.user,
     this.isFriend = false,
-    this.onLibraryTap,
   });
 
   final User user;
   final bool isFriend;
-  /// Callback invocado al seleccionar el card de un amigo para ver su biblioteca.
-  /// Si es null, navega al perfil de usuario (comportamiento por defecto).
-  final VoidCallback? onLibraryTap;
 
   @override
   State<UserCard> createState() => _UserCardState();
@@ -93,7 +89,6 @@ class _UserCardState extends State<UserCard> {
       onTapDown: (_) => setState(() => _isPressed = true),
       onTapUp: (_) {
         setState(() => _isPressed = false);
-        // Siempre abre el perfil público del usuario
         Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => UserProfileScreen(user: widget.user),
@@ -147,7 +142,7 @@ class _UserCardState extends State<UserCard> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        widget.user.isOnline ? 'Online' : 'Offline',
+                        widget.user.isOnline ? 'En Línea' : 'Desconectado',
                         style: TextStyle(
                           fontSize: 12,
                           color: widget.user.isOnline ? _green : _textSub,

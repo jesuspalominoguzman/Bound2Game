@@ -165,6 +165,42 @@ const updatePcComponents = async (req, res) => {
 };
 
 /**
+ * Actualizar las plataformas (Steam, Epic, Xbox, Discord) del usuario autenticado.
+ */
+const updatePlatforms = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const { steamId, epicId, xboxId, discordId } = req.body;
+
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        if (steamId !== undefined) user.steamId = steamId;
+        if (epicId !== undefined) user.epicId = epicId;
+        if (xboxId !== undefined) user.xboxId = xboxId;
+        if (discordId !== undefined) user.discordId = discordId;
+
+        await user.save();
+
+        return res.status(200).json({
+            message: 'Plataformas actualizadas con éxito',
+            platforms: {
+                steamId: user.steamId,
+                epicId: user.epicId,
+                xboxId: user.xboxId,
+                discordId: user.discordId
+            }
+        });
+    } catch (error) {
+        console.error('Error en updatePlatforms:', error);
+        return res.status(500).json({ error: 'Error interno al actualizar las plataformas' });
+    }
+};
+
+/**
  * Obtener la lista de amigos del usuario autenticado.
  * Incluye populate anidado con los juegos recientes de cada amigo
  * (hasta 5 títulos de su UserLibrary) para mostrarlos en la pantalla Social.
@@ -176,7 +212,7 @@ const getUserFriends = async (req, res) => {
 
         // 1. Traer el usuario con sus amigos populados (datos básicos)
         const user = await User.findById(userId)
-            .populate('friends', 'username avatarUrl karma reputation bio');
+            .populate('friends', 'username avatarUrl karma reputation bio isOnline');
 
         if (!user) {
             return res.status(404).json({ error: 'Usuario no encontrado' });
@@ -215,6 +251,7 @@ const getUserFriends = async (req, res) => {
                     karma:            friend.karma,
                     reputation:       friend.reputation,
                     bio:              friend.bio,
+                    isOnline:         friend.isOnline ?? false,
                     recentGames,
                     recentGameCovers
                 };
@@ -243,7 +280,7 @@ const searchUsers = async (req, res) => {
 
         // Buscar usuarios ignorando mayúsculas/minúsculas usando expresión regular
         const users = await User.find({ username: { $regex: q, $options: 'i' } })
-                                .select('username avatarUrl karma bio')
+                                .select('username avatarUrl karma bio isOnline')
                                 .limit(20);
 
         return res.status(200).json({
@@ -311,6 +348,17 @@ const manageFriendRequest = async (req, res) => {
                 id => id.toString() !== targetId
             );
             await Promise.all([sender.save(), receiver.save()]);
+
+            // Emitir evento de socket si el receptor está conectado
+            const io = req.app.get('io');
+            if (io) {
+                io.of('/chat').to(`user_${targetId}`).emit('friendRequest', {
+                    username: sender.username,
+                    userId: senderId,
+                    type: 'accepted'
+                });
+            }
+
             return res.status(200).json({
                 message: '¡Solicitud aceptada! Ahora sois amigos.',
                 status: 'accepted'
@@ -327,6 +375,16 @@ const manageFriendRequest = async (req, res) => {
         // ── ENVIAR: añadir senderId a los pendingRequests del receiver ────────
         receiver.pendingRequests.push(senderId);
         await receiver.save();
+
+        // Emitir evento de socket si el receptor está conectado
+        const io = req.app.get('io');
+        if (io) {
+            io.of('/chat').to(`user_${targetId}`).emit('friendRequest', {
+                username: sender.username,
+                userId: senderId,
+                type: 'request'
+            });
+        }
 
         return res.status(200).json({
             message: 'Solicitud de amistad enviada correctamente.',
@@ -425,6 +483,77 @@ const getPendingRequests = async (req, res) => {
     }
 };
 
+/**
+ * GET /api/users/:userId/profile-public
+ * Devuelve la información pública de un usuario (para mostrar en su pantalla de perfil).
+ */
+const getUserProfilePublic = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(400).json({ error: 'userId no válido' });
+        }
+
+        const targetUser = await User.findById(userId)
+            .select('username avatarUrl bio karma reputation steamId epicId xboxId discordId pcComponents isOnline friends')
+            .lean();
+
+        if (!targetUser) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        const friendsCount = targetUser.friends ? targetUser.friends.length : 0;
+
+        return res.status(200).json({
+            message: 'Perfil público recuperado con éxito',
+            profile: {
+                id: targetUser._id,
+                username: targetUser.username,
+                avatarUrl: targetUser.avatarUrl,
+                bio: targetUser.bio,
+                karma: targetUser.karma,
+                reputation: targetUser.reputation,
+                steamId: targetUser.steamId,
+                epicId: targetUser.epicId,
+                xboxId: targetUser.xboxId,
+                discordId: targetUser.discordId,
+                pcComponents: targetUser.pcComponents,
+                isOnline: targetUser.isOnline,
+                friendsCount: friendsCount
+            }
+        });
+    } catch (error) {
+        console.error('Error en getUserProfilePublic:', error);
+        return res.status(500).json({ error: 'Error interno al recuperar el perfil público' });
+    }
+};
+
+/**
+ * PUT /api/users/me/fcm-token
+ * Actualiza el token de Firebase Cloud Messaging del usuario actual.
+ */
+const updateFcmToken = async (req, res) => {
+    try {
+        const { fcmToken } = req.body;
+
+        if (!fcmToken) {
+            return res.status(400).json({ error: 'Token FCM no proporcionado' });
+        }
+
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+        user.fcmToken = fcmToken;
+        await user.save();
+
+        return res.status(200).json({ message: 'Token FCM actualizado correctamente' });
+    } catch (error) {
+        console.error('Error en updateFcmToken:', error);
+        return res.status(500).json({ error: 'Error interno al actualizar el token' });
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
@@ -435,5 +564,8 @@ module.exports = {
     manageFriendRequest,
     getFriendLibrary,
     getUserLibraryPreview,
-    getPendingRequests
+    getPendingRequests,
+    getUserProfilePublic,
+    updatePlatforms,
+    updateFcmToken
 };

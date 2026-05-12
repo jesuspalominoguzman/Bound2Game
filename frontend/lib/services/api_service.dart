@@ -298,7 +298,7 @@ class ApiService {
   }
 
   // ── Timeout global ────────────────────────────────────────────────────────
-  static const _timeout = Duration(seconds: 15);
+  static const _timeout = Duration(seconds: 20);
 
   // ── Cabeceras comunes ─────────────────────────────────────────────────────
   static Future<Map<String, String>> _headers({bool withAuth = false}) async {
@@ -408,6 +408,30 @@ class ApiService {
     }
   }
 
+  /// PUT /api/users/me/platforms
+  static Future<void> updatePlatforms({
+    String? steamId,
+    String? epicId,
+    String? xboxId,
+    String? discordId,
+  }) async {
+    final body = <String, dynamic>{};
+    if (steamId != null) body['steamId'] = steamId;
+    if (epicId != null) body['epicId'] = epicId;
+    if (xboxId != null) body['xboxId'] = xboxId;
+    if (discordId != null) body['discordId'] = discordId;
+
+    final r = await http
+        .put(
+          Uri.parse('$baseUrl/api/users/me/platforms'),
+          headers: await _headers(withAuth: true),
+          body: jsonEncode(body),
+        )
+        .timeout(_timeout);
+
+    _parse(r);
+  }
+
   // ───────────────────────────────────────────────────────────────────────────
   // USUARIOS
   // ───────────────────────────────────────────────────────────────────────────
@@ -437,17 +461,31 @@ class ApiService {
     }
   }
 
-  /// GET /api/users/pending-requests — Solicitudes de amistad entrantes
+  /// GET /api/users/pending-requests
   static Future<List<UserSearchResult>> getPendingRequests() async {
     final r = await http
-        .get(Uri.parse('$baseUrl/api/users/pending-requests'),
-             headers: await _headers(withAuth: true))
+        .get(
+          Uri.parse('$baseUrl/api/users/pending-requests'),
+          headers: await _headers(withAuth: true),
+        )
         .timeout(_timeout);
+
     final data = _parse(r);
-    final list = data['pendingRequests'] as List? ?? [];
-    return list
-        .map((j) => UserSearchResult.fromJson(j as Map<String, dynamic>))
-        .toList();
+    final list = (data['pendingRequests'] as List?) ?? [];
+    return list.map((u) => UserSearchResult.fromJson(u as Map<String, dynamic>)).toList();
+  }
+
+  /// GET /api/users/:userId/profile-public
+  static Future<User> getUserProfilePublic(String userId) async {
+    final r = await http
+        .get(
+          Uri.parse('$baseUrl/api/users/$userId/profile-public'),
+          headers: await _headers(withAuth: true),
+        )
+        .timeout(_timeout);
+
+    final data = _parse(r);
+    return User.fromJson(data['profile'] as Map<String, dynamic>);
   }
 
   /// GET /api/users/search?q=... — Buscar usuarios en la BD (regex insensible)
@@ -707,5 +745,18 @@ class ApiService {
     return games
         .map((g) => Deal.fromJson(g as Map<String, dynamic>))
         .toList();
+  }
+
+  /// PUT /api/users/me/fcm-token
+  static Future<void> updateFcmToken(String fcmToken) async {
+    try {
+      await http.put(
+        Uri.parse('$baseUrl/api/users/me/fcm-token'),
+        headers: await _headers(withAuth: true),
+        body: jsonEncode({'fcmToken': fcmToken}),
+      ).timeout(_timeout);
+    } catch (e) {
+      print('❌ [ApiService] Error al actualizar FCM Token: $e');
+    }
   }
 }

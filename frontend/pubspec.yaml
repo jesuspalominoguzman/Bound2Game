@@ -38,7 +38,7 @@ dependencies:
   google_fonts: ^6.2.1
 
   # Persistencia local — filtros de tiendas y preferencias de notificaciones.
-  shared_preferences: ^2.3.2
+  shared_preferences: ^2.5.5
 
   # Cliente HTTP para llamadas REST al backend de Bound2Game.
   http: ^1.2.2
@@ -55,6 +55,7 @@ dependencies:
   giphy_get: ^3.6.1+1
   flutter_dotenv: ^6.0.1
   flutter_html: ^3.0.0
+  palette_generator: ^0.3.3+7
 
 dev_dependencies:
   flutter_test:

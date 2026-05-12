@@ -22,6 +22,11 @@ class User {
   /// URLs de portada de los juegos recientes (misma longitud que recentGames).
   final List<String> recentGameCovers;
   final bool isOnline;
+  final String? steamId;
+  final String? epicId;
+  final String? xboxId;
+  final String? discordId;
+  final int friendsCount;
 
   const User({
     required this.id,
@@ -35,6 +40,11 @@ class User {
     this.recentGames = const [],
     this.recentGameCovers = const [],
     this.isOnline = true,
+    this.steamId,
+    this.epicId,
+    this.xboxId,
+    this.discordId,
+    this.friendsCount = 0,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -66,6 +76,11 @@ class User {
           .map((g) => g.toString())
           .toList(),
       isOnline: json['isOnline'] as bool? ?? true,
+      steamId: json['steamId']?.toString(),
+      epicId: json['epicId']?.toString(),
+      xboxId: json['xboxId']?.toString(),
+      discordId: json['discordId']?.toString(),
+      friendsCount: (json['friendsCount'] as num?)?.toInt() ?? friendsList.length,
     );
   }
 
@@ -91,5 +106,35 @@ class User {
     ];
     final hash = id.hashCode.abs();
     return colors[hash % colors.length];
+  }
+  /// Crea una copia del usuario con los campos especificados actualizados.
+  /// Útil para actualizaciones inmutables de estado (ej: isOnline en tiempo real).
+  User copyWith({
+    bool? isOnline,
+    String? steamId,
+    String? epicId,
+    String? xboxId,
+    String? discordId,
+    int? friendsCount,
+    Map<String, dynamic>? pcComponents,
+  }) {
+    return User(
+      id: id,
+      username: username,
+      email: email,
+      avatarUrl: avatarUrl,
+      bio: bio,
+      karma: karma,
+      pcComponents: pcComponents ?? Map<String, dynamic>.from(this.pcComponents),
+      friends: friends,
+      recentGames: recentGames,
+      recentGameCovers: recentGameCovers,
+      isOnline: isOnline ?? this.isOnline,
+      steamId: steamId ?? this.steamId,
+      epicId: epicId ?? this.epicId,
+      xboxId: xboxId ?? this.xboxId,
+      discordId: discordId ?? this.discordId,
+      friendsCount: friendsCount ?? this.friendsCount,
+    );
   }
 }

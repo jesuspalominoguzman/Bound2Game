@@ -34,6 +34,18 @@ const userSchema = new mongoose.Schema({
         type: String,
         default: ''
     },
+    epicId: {
+        type: String,
+        default: ''
+    },
+    xboxId: {
+        type: String,
+        default: ''
+    },
+    discordId: {
+        type: String,
+        default: ''
+    },
     reputation: {
         karma: {
             type: Number,
@@ -71,7 +83,16 @@ const userSchema = new mongoose.Schema({
     pendingRequests: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
-    }]
+    }],
+    // Estado de presencia en tiempo real — true mientras la app está en primer plano
+    isOnline: {
+        type: Boolean,
+        default: false
+    },
+    fcmToken: {
+        type: String,
+        default: ''
+    }
 }, {
     timestamps: true
 });

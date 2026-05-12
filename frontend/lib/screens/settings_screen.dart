@@ -39,21 +39,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _ramCtrl = TextEditingController();
   final _storageCtrl = TextEditingController();
 
+  final _steamCtrl = TextEditingController();
+  final _epicCtrl = TextEditingController();
+  final _xboxCtrl = TextEditingController();
+  final _discordCtrl = TextEditingController();
+  
+
+
   @override
   void initState() {
     super.initState();
     DealsPrefService.instance.then((s) {
       if (mounted) setState(() { _svc = s; _loading = false; });
     });
-    AuthService.getCurrentUser().then((user) {
-      if (user != null && mounted) {
+    ApiService.fetchMyProfile().then((user) {
+      if (mounted) {
         final pc = user.pcComponents;
         _cpuCtrl.text = pc['cpu']?.toString() ?? '';
         _gpuCtrl.text = pc['gpu']?.toString() ?? '';
         _ramCtrl.text = pc['ram']?.toString() ?? '';
         _storageCtrl.text = pc['storage']?.toString() ?? '';
+
+        _steamCtrl.text = user.steamId ?? '';
+        _epicCtrl.text = user.epicId ?? '';
+        _xboxCtrl.text = user.xboxId ?? '';
+        _discordCtrl.text = user.discordId ?? '';
       }
     });
+
   }
 
   @override
@@ -81,17 +94,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // ── Sección: Notificaciones de Ofertas ─────────────────
-                  _SectionLabel(
-                    icon: Icons.notifications_active_rounded,
-                    iconColor: _yellow,
-                    title: 'Notificaciones de Juegos Gratuitos',
-                    subtitle: 'Activa alertas por tienda',
-                  ),
-                  const SizedBox(height: 8),
-                  _NotifTogglesCard(svc: _svc!, onChanged: () => setState(() {})),
 
-                  const SizedBox(height: 24),
 
                   // ── Sección: Tiendas Visibles ──────────────────────────
                   _SectionLabel(
@@ -122,6 +125,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
                   const SizedBox(height: 24),
 
+                  // ── Sección: Plataformas Vinculadas ───────────────────
+                  _SectionLabel(
+                    icon: Icons.videogame_asset_rounded,
+                    iconColor: Colors.blueAccent,
+                    title: 'Plataformas Vinculadas',
+                    subtitle: 'Tus perfiles públicos',
+                  ),
+                  const SizedBox(height: 8),
+                  _PlatformsCard(
+                    steamCtrl: _steamCtrl,
+                    epicCtrl: _epicCtrl,
+                    xboxCtrl: _xboxCtrl,
+                    discordCtrl: _discordCtrl,
+                  ),
+
+                  const SizedBox(height: 24),
+
                   // ── Sección: General (placeholder) ────────────────────
                   _SectionLabel(
                     icon: Icons.tune_rounded,
@@ -131,6 +151,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 8),
                   _GeneralCard(),
+
+                  const SizedBox(height: 24),
+
+
 
                   const SizedBox(height: 32),
 
@@ -216,76 +240,7 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-// =============================================================================
-// _NotifTogglesCard — Toggles de notificación por tienda
-// =============================================================================
 
-class _NotifTogglesCard extends StatelessWidget {
-  const _NotifTogglesCard({required this.svc, required this.onChanged});
-  final DealsPrefService svc;
-  final VoidCallback onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: _bgCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: _border),
-      ),
-      child: Column(
-        children: DealStore.values.map((store) {
-          final cfg = store.config;
-          final enabled = svc.isFreeGamesAlertEnabled(store);
-          final isLast = store == DealStore.values.last;
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: BoxDecoration(
-                        color: cfg.background,
-                        borderRadius: BorderRadius.circular(7),
-                      ),
-                      child: Icon(cfg.icon, size: 13, color: cfg.color),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        cfg.name,
-                        style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: _textMain),
-                      ),
-                    ),
-                    Switch(
-                      value: enabled,
-                      onChanged: (v) async {
-                        await svc.setFreeGamesAlert(store, v);
-                        onChanged();
-                      },
-                      activeThumbColor: cfg.color,
-                      activeTrackColor: cfg.color.withValues(alpha: 0.25),
-                      inactiveThumbColor: _textMuted,
-                      inactiveTrackColor: _border,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    ),
-                  ],
-                ),
-              ),
-              if (!isLast)
-                Container(height: 1, color: _border, margin: const EdgeInsets.symmetric(horizontal: 14)),
-            ],
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
 
 // =============================================================================
 // _StoreVisibilityCard — Visibilidad de tiendas en la pantalla de Ofertas
@@ -571,3 +526,101 @@ class _TextFieldRow extends StatelessWidget {
     );
   }
 }
+
+// =============================================================================
+// _PlatformsCard — Formulario de Plataformas
+// =============================================================================
+
+class _PlatformsCard extends StatefulWidget {
+  const _PlatformsCard({
+    required this.steamCtrl,
+    required this.epicCtrl,
+    required this.xboxCtrl,
+    required this.discordCtrl,
+  });
+
+  final TextEditingController steamCtrl;
+  final TextEditingController epicCtrl;
+  final TextEditingController xboxCtrl;
+  final TextEditingController discordCtrl;
+
+  @override
+  State<_PlatformsCard> createState() => _PlatformsCardState();
+}
+
+class _PlatformsCardState extends State<_PlatformsCard> {
+  bool _saving = false;
+
+  Future<void> _save() async {
+    setState(() => _saving = true);
+    try {
+      await ApiService.updatePlatforms(
+        steamId: widget.steamCtrl.text.trim(),
+        epicId: widget.epicCtrl.text.trim(),
+        xboxId: widget.xboxCtrl.text.trim(),
+        discordId: widget.discordCtrl.text.trim(),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: const Text('Plataformas actualizadas correctamente', style: TextStyle(color: _green, fontSize: 13)),
+          backgroundColor: _bgCard,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: const BorderSide(color: _border)),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Error: $e', style: const TextStyle(color: _red, fontSize: 13)),
+          backgroundColor: _bgCard,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10), side: const BorderSide(color: _border)),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _bgCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: _border),
+      ),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          _TextFieldRow(label: 'Steam', ctrl: widget.steamCtrl, hint: 'Tu Steam ID'),
+          const SizedBox(height: 12),
+          _TextFieldRow(label: 'Epic', ctrl: widget.epicCtrl, hint: 'Tu Epic ID'),
+          const SizedBox(height: 12),
+          _TextFieldRow(label: 'Xbox', ctrl: widget.xboxCtrl, hint: 'Tu Gamertag'),
+          const SizedBox(height: 12),
+          _TextFieldRow(label: 'Discord', ctrl: widget.discordCtrl, hint: 'Tu nombre de usuario'),
+          const SizedBox(height: 20),
+          SizedBox(
+            width: double.infinity,
+            height: 42,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blueAccent,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                elevation: 0,
+              ),
+              onPressed: _saving ? null : _save,
+              child: _saving 
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                : const Text('Guardar Plataformas', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+

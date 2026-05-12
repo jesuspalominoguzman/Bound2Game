@@ -39,6 +39,12 @@ router.post('/friend-request', authMiddleware, userController.manageFriendReques
 // PUT /api/users/me/pc-components (Ruta Protegida)
 router.put('/me/pc-components', authMiddleware, userController.updatePcComponents);
 
+// PUT /api/users/me/platforms (Ruta Protegida)
+router.put('/me/platforms', authMiddleware, userController.updatePlatforms);
+
+// PUT /api/users/me/fcm-token (Ruta Protegida)
+router.put('/me/fcm-token', authMiddleware, userController.updateFcmToken);
+
 // ── Biblioteca del usuario ─────────────────────────────────────────────────────
 // GET    /api/users/:userId/library          → obtener todos los juegos
 // POST   /api/users/:userId/library          → añadir juego
@@ -61,5 +67,8 @@ router.get   ('/:userId/library-public',      authMiddleware, userController.get
 // GET /api/users/:userId/library-preview — Vista previa pública (sin requerir amistad)
 // Permite ver los juegos de un usuario antes de añadirlo como amigo
 router.get   ('/:userId/library-preview',     authMiddleware, userController.getUserLibraryPreview);
+
+// GET /api/users/:userId/profile-public — Info pública del perfil
+router.get   ('/:userId/profile-public',      authMiddleware, userController.getUserProfilePublic);
 
 module.exports = router;

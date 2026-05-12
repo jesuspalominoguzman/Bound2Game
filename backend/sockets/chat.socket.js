@@ -1,48 +1,66 @@
 // =============================================================================
 // chat.socket.js — Bound2Game Backend
 //
-// Controlador de WebSockets para el chat efímero entre jugadores.
-// Exporta una única función que recibe la instancia de Socket.io y registra
-// todos los eventos bajo el namespace '/chat', sin tocar el servidor HTTP.
+// Controlador de WebSockets para:
+//   • Chat efímero entre jugadores (namespace /chat)
+//   • Presencia en tiempo real: isOnline en MongoDB
 //
-// Uso en index.js (añadir SOLO estas dos líneas):
+// Uso en index.js:
 //   const chatSocket = require('./sockets/chat.socket');
 //   chatSocket(io);
 // =============================================================================
 
 const Message = require('../src/models/Message');
+const User    = require('../src/models/User');
+
+// Mapa socketId → userId para gestionar disconnects de presencia
+const socketUserMap = new Map();
 
 /**
- * Inicializa el namespace /chat y todos sus manejadores de eventos.
- * @param {import('socket.io').Server} io - Instancia principal de Socket.io
+ * Inicializa el namespace /chat y los manejadores de presencia.
+ * @param {import('socket.io').Server} io
  */
 module.exports = function initChatSocket(io) {
-    // ── Namespace dedicado ──────────────────────────────────────────────────
-    // Aísla el tráfico de chat del resto de namespaces del servidor.
     const chatNamespace = io.of('/chat');
 
     chatNamespace.on('connection', (socket) => {
         console.log(`🔌 [Chat] Cliente conectado: ${socket.id}`);
 
-        // ── joinRoom ────────────────────────────────────────────────────────
-        // El cliente envía { roomId } para suscribirse a una sala concreta.
-        // La sala se nombra como "<userId1>_<userId2>" (IDs ordenados
-        // alfabéticamente para garantizar unicidad bidireccional).
+        // ── userConnected ────────────────────────────────────────────────────
+        // El cliente emite esto al abrir la app / volver a primer plano.
+        // Payload: { userId: string }
+        socket.on('userConnected', async ({ userId }) => {
+            if (!userId) return;
+            socketUserMap.set(socket.id, userId);
+            try {
+                await User.findByIdAndUpdate(userId, { isOnline: true });
+                console.log(`🟢 [Presence] ${userId} → En Línea`);
+                
+                // Unir al usuario a su propia sala privada para notificaciones dirigidas
+                socket.join(`user_${userId}`);
+                console.log(`🏠 [Presence] Socket ${socket.id} unido a sala: user_${userId}`);
+                
+                // Notificar a TODOS los clientes conectados para actualización en tiempo real
+                chatNamespace.emit('presenceUpdate', { userId, isOnline: true });
+            } catch (err) {
+                console.error('🔴 [Presence] Error al actualizar isOnline=true:', err);
+            }
+        });
+
+        // ── joinRoom ─────────────────────────────────────────────────────────
         socket.on('joinRoom', async ({ roomId }) => {
             if (!roomId) return;
 
-            // Salir de cualquier sala anterior (cada socket solo ocupa una)
+            // Salir de salas anteriores
             const currentRooms = Array.from(socket.rooms).filter(
                 (r) => r !== socket.id
             );
             currentRooms.forEach((r) => socket.leave(r));
 
-            // Entrar a la nueva sala
             socket.join(roomId);
             console.log(`📥 [Chat] Socket ${socket.id} unido a sala: ${roomId}`);
 
-            // Enviar historial de las últimas 50 mensajes de la sala
-            // (dentro de la ventana de 24h gracias al TTL)
+            // Enviar historial (últimas 50 mensajes dentro de la ventana 24h TTL)
             try {
                 const history = await Message.find({ chatRoomId: roomId })
                     .sort({ createdAt: 1 })
@@ -56,11 +74,9 @@ module.exports = function initChatSocket(io) {
             }
         });
 
-        // ── sendMessage ─────────────────────────────────────────────────────
-        // Payload esperado: { roomId, senderId, content, messageType }
-        // Persiste en MongoDB (con TTL 24h) y emite a todos en la sala.
+        // ── sendMessage ──────────────────────────────────────────────────────
+        // Payload: { roomId, senderId, content, messageType }
         socket.on('sendMessage', async ({ roomId, senderId, content, messageType }) => {
-            // Validación básica de campos requeridos
             if (!roomId || !senderId || !content) {
                 socket.emit('chatError', { message: 'Faltan campos requeridos.' });
                 return;
@@ -69,7 +85,6 @@ module.exports = function initChatSocket(io) {
             const type = ['text', 'gif'].includes(messageType) ? messageType : 'text';
 
             try {
-                // Persistir en MongoDB — el TTL se encarga de borrar tras 24h
                 const newMessage = await Message.create({
                     chatRoomId: roomId,
                     senderId,
@@ -77,26 +92,58 @@ module.exports = function initChatSocket(io) {
                     messageType: type,
                 });
 
-                // Emitir a todos los miembros de la sala (incluido el remitente)
                 chatNamespace.to(roomId).emit('newMessage', {
-                    _id: newMessage._id,
-                    chatRoomId: newMessage.chatRoomId,
-                    senderId: newMessage.senderId,
-                    content: newMessage.content,
-                    messageType: newMessage.messageType,
-                    createdAt: newMessage.createdAt,
+                    _id:          newMessage._id,
+                    chatRoomId:   newMessage.chatRoomId,
+                    senderId:     newMessage.senderId,
+                    content:      newMessage.content,
+                    messageType:  newMessage.messageType,
+                    createdAt:    newMessage.createdAt,
                 });
 
                 console.log(`💬 [Chat] Mensaje [${type}] en sala ${roomId} de ${senderId}`);
+
+                // ── Enviar Notificación Push al destinatario ──────────────────
+                // Asumimos que el roomId tiene el formato userId1_userId2
+                const ids = roomId.split('_');
+                const recipientId = ids.find(id => id !== senderId);
+
+                if (recipientId) {
+                    // Notificar al destinatario a través de su sala privada si está conectado
+                    // Esto permite mostrar notificaciones locales en la app aunque no esté en el chat
+                    chatNamespace.to(`user_${recipientId}`).emit('newMessage', {
+                        _id:          newMessage._id,
+                        chatRoomId:   newMessage.chatRoomId,
+                        senderId:     newMessage.senderId,
+                        content:      newMessage.content,
+                        messageType:  newMessage.messageType,
+                        createdAt:    newMessage.createdAt,
+                    });
+                }
             } catch (err) {
                 console.error('🔴 [Chat] Error al guardar mensaje:', err);
                 socket.emit('chatError', { message: 'No se pudo enviar el mensaje.' });
             }
         });
 
-        // ── disconnect ──────────────────────────────────────────────────────
-        socket.on('disconnect', (reason) => {
+        // ── disconnect ───────────────────────────────────────────────────────
+        // Se dispara automáticamente cuando el socket se cierra (app en background / cerrada).
+        socket.on('disconnect', async (reason) => {
             console.log(`🔌 [Chat] Cliente desconectado: ${socket.id} — Razón: ${reason}`);
+
+            const userId = socketUserMap.get(socket.id);
+            if (userId) {
+                socketUserMap.delete(socket.id);
+                try {
+                    await User.findByIdAndUpdate(userId, { isOnline: false });
+                    console.log(`🔴 [Presence] ${userId} → Desconectado`);
+                    // Notificar a TODOS los clientes conectados para actualización en tiempo real
+                    chatNamespace.emit('presenceUpdate', { userId, isOnline: false });
+                } catch (err) {
+                    console.error('🔴 [Presence] Error al actualizar isOnline=false:', err);
+                }
+            }
         });
     });
 };
+
