@@ -21,6 +21,8 @@ class Deal {
   final String storeName;
   final String thumbUrl;
   final String category;
+  final String? dealUrl;
+  final String? releaseDate;
 
   const Deal({
     required this.id,
@@ -30,6 +32,8 @@ class Deal {
     required this.storeName,
     required this.thumbUrl,
     required this.category,
+    this.dealUrl,
+    this.releaseDate,
   });
 
   factory Deal.fromJson(Map<String, dynamic> json) {
@@ -41,6 +45,8 @@ class Deal {
       storeName: json['storeName']?.toString() ?? json['storeID']?.toString() ?? 'Steam',
       thumbUrl: json['thumb']?.toString() ?? '',
       category: json['category']?.toString() ?? 'DEAL',
+      dealUrl: json['dealUrl']?.toString(),
+      releaseDate: json['releaseDate']?.toString(),
     );
   }
 
@@ -58,12 +64,12 @@ class Deal {
 
   DealStore get storeEnum {
     final s = storeName.toLowerCase();
+    if (s.contains('steam')) return DealStore.steam;
     if (s.contains('epic')) return DealStore.epic;
     if (s.contains('playstation') || s.contains('psn') || s.contains('psstore')) return DealStore.psStore;
     if (s.contains('xbox') || s.contains('microsoft')) return DealStore.xbox;
     if (s.contains('nintendo')) return DealStore.nintendo;
-    if (s.contains('instant')) return DealStore.instantGaming;
-    return DealStore.steam;
+    return DealStore.other;
   }
 
   int get calculatedDiscount {
@@ -102,7 +108,7 @@ enum DealStore {
   psStore,
   xbox,
   nintendo,
-  instantGaming;
+  other;
 
   DealStoreConfig get config => DealStoreConfig.of(this);
 }
@@ -163,12 +169,12 @@ class DealStoreConfig {
           background: const Color(0xFFE60012).withValues(alpha: 0.12),
           icon: Icons.videogame_asset_rounded,
         );
-      case DealStore.instantGaming:
+      case DealStore.other:
         return DealStoreConfig(
-          name: 'Instant Gaming', shortName: 'IG',
-          color: const Color(0xFFFF6B00),
-          background: const Color(0xFFFF6B00).withValues(alpha: 0.12),
-          icon: Icons.flash_on_rounded,
+          name: 'Store', shortName: 'ST',
+          color: const Color(0xFF888888),
+          background: const Color(0xFF888888).withValues(alpha: 0.12),
+          icon: Icons.storefront_rounded,
         );
     }
   }
@@ -183,6 +189,7 @@ class GameDeal {
   final String gameTitle;
   final String? gameCover;
   final DealStore store;
+  final String? storeName;
   final double originalPrice;
   final double salePrice;
   final int discountPercent;
@@ -196,6 +203,7 @@ class GameDeal {
     required this.gameId,
     required this.gameTitle,
     required this.store,
+    this.storeName,
     required this.originalPrice,
     required this.salePrice,
     required this.discountPercent,
@@ -220,6 +228,7 @@ class GameDeal {
       gameTitle:       json['gameTitle']?.toString()  ?? 'Unknown',
       gameCover:       json['gameCover']?.toString(),
       store:           store,
+      storeName:       json['storeName']?.toString(),
       originalPrice:   origPrice,
       salePrice:       salePrice,
       discountPercent: (json['discountPercent'] as num?)?.toInt() ?? 0,
@@ -234,8 +243,8 @@ class GameDeal {
       case 'psstore':       return DealStore.psStore;
       case 'xbox':          return DealStore.xbox;
       case 'nintendo':      return DealStore.nintendo;
-      case 'instantgaming': return DealStore.instantGaming;
-      default:              return DealStore.steam;
+      case 'steam':         return DealStore.steam;
+      default:              return DealStore.other;
     }
   }
 

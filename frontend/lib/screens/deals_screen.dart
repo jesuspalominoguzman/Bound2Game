@@ -10,6 +10,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/deal_model.dart';
 import '../models/game_model.dart';
 import 'game_detail_screen.dart';
@@ -36,7 +37,6 @@ Platform _storeToGamePlatform(DealStore store) {
   switch (store) {
     case DealStore.steam:         return Platform.steam;
     case DealStore.epic:          return Platform.epic;
-    case DealStore.instantGaming: return Platform.ig;
     default:                      return Platform.integrated;
   }
 }
@@ -52,13 +52,24 @@ Game _dealToGame(Deal deal) => Game(
   price: deal.normalPrice, year: DateTime.now().year,
 );
 
-Game _resolveGame(Deal deal) {
+// _resolveGame: ya no depende de sampleGames, usa solo datos de la oferta
+Game _resolveGame(Deal deal) => _dealToGame(deal);
+
+Future<void> _launchDealUrl(String? url) async {
+  if (url == null || url.isEmpty) return;
+  final uri = Uri.parse(url);
   try {
-    return sampleGames.firstWhere(
-      (g) => g.id.toString() == deal.id || g.title.toLowerCase() == deal.title.toLowerCase(),
-    );
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  } catch (_) {}
+}
+
+String _formatDate(String dateStr) {
+  try {
+    final dt = DateTime.parse(dateStr);
+    const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
   } catch (_) {
-    return _dealToGame(deal);
+    return dateStr;
   }
 }
 
@@ -99,9 +110,7 @@ class _DealsScreenState extends State<DealsScreen> {
           ? _wishlist.remove(id)
           : _wishlist.add(id));
 
-  void _openGame(Deal deal) => Navigator.of(context).push(
-    MaterialPageRoute(builder: (_) => GameDetailScreen(baseGame: _resolveGame(deal))),
-  );
+  void _openGame(Deal deal) => _launchDealUrl(deal.dealUrl);
 
   Widget _buildLoading() {
     return const SizedBox(
@@ -581,27 +590,30 @@ class _HeroCard extends StatelessWidget {
                       const SizedBox(height: 16),
 
                       // Botón RECLAMAR
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        decoration: BoxDecoration(
-                          color: _yellow,
-                          borderRadius: BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: _yellow.withValues(alpha: 0.3),
-                              blurRadius: 12, offset: const Offset(0, 4),
-                            )
-                          ],
-                        ),
-                        child: Center(
-                          child: Text(
-                            'RECLAMAR AHORA',
-                            style: GoogleFonts.outfit(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w900,
-                              color: Colors.black,
-                              letterSpacing: 0.5,
+                      GestureDetector(
+                        onTap: () => _launchDealUrl(deal.dealUrl),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(
+                            color: deal.dealUrl != null ? _yellow : _textMuted,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: deal.dealUrl != null ? [
+                              BoxShadow(
+                                color: _yellow.withValues(alpha: 0.3),
+                                blurRadius: 12, offset: const Offset(0, 4),
+                              )
+                            ] : [],
+                          ),
+                          child: Center(
+                            child: Text(
+                              deal.dealUrl != null ? 'RECLAMAR AHORA' : 'NO DISPONIBLE',
+                              style: GoogleFonts.outfit(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                                color: Colors.black,
+                                letterSpacing: 0.5,
+                              ),
                             ),
                           ),
                         ),
@@ -750,17 +762,20 @@ class _UpcomingCard extends StatelessWidget {
                       maxLines: 2, overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 3),
 
-                  // Fecha genérica (ya que la API no manda Date clara)
+                  // Fecha real de lanzamiento
                   Row(
-                    children: const [
-                      Icon(Icons.calendar_today_rounded,
+                    children: [
+                      const Icon(Icons.calendar_today_rounded,
                           size: 9, color: _textMuted),
-                      SizedBox(width: 3),
+                      const SizedBox(width: 3),
                       Expanded(
-                        child: Text('Próximamente',
-                            style: TextStyle(
-                                fontSize: 9, color: _textMuted),
-                            overflow: TextOverflow.ellipsis),
+                        child: Text(
+                          deal.releaseDate != null
+                              ? _formatDate(deal.releaseDate!)
+                              : 'Próximamente',
+                          style: const TextStyle(
+                              fontSize: 9, color: _textMuted),
+                          overflow: TextOverflow.ellipsis),
                       ),
                     ],
                   ),

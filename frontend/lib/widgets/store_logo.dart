@@ -26,7 +26,6 @@ const _kStoreLogos = <DealStore, String>{
   DealStore.psStore:       'assets/images/ps_logo.png',
   DealStore.xbox:          'assets/images/xbox_logo.png',
   DealStore.nintendo:      'assets/images/nintendo_logo.svg',
-  DealStore.instantGaming: 'assets/images/instant_logo.png',
 };
 
 // Tiendas con logos monocromáticos (negros) que necesitan invertirse a blanco
