@@ -98,29 +98,19 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
       if (user == null) throw Exception('No session');
 
       // 1. Fetch Deals
-      final allDeals = await ApiService.fetchDeals(limit: 60);
-      final titleLower = widget.baseGame.title.toLowerCase();
-      final filteredDeals = allDeals.where((d) => 
-        d.title.toLowerCase().contains(titleLower) || titleLower.contains(d.title.toLowerCase())
-      ).toList();
+      final dealsForGame = await ApiService.fetchDealsByGame(widget.baseGame.title);
 
-      _deals = filteredDeals.map((d) {
-        DealStore store = DealStore.steam;
-        final sName = d.storeName.toLowerCase();
-        if (sName.contains('epic')) { store = DealStore.epic; }
-        else if (sName.contains('playstation') || sName.contains('ps')) { store = DealStore.psStore; }
-        else if (sName.contains('xbox')) { store = DealStore.xbox; }
-        else if (sName.contains('nintendo')) { store = DealStore.nintendo; }
-        else if (sName.contains('instant')) { store = DealStore.instantGaming; }
-
+      _deals = dealsForGame.map((d) {
         return GameDeal(
           gameId: widget.baseGame.id.toString(),
           gameTitle: d.title,
-          store: store,
+          store: d.storeEnum,
+          storeName: d.storeName,
           originalPrice: d.normalPrice,
           salePrice: d.salePrice,
-          discountPercent: d.normalPrice > 0 ? ((d.normalPrice - d.salePrice) / d.normalPrice * 100).round() : 0,
-          isFree: d.salePrice == 0,
+          discountPercent: d.calculatedDiscount,
+          isFree: d.salePrice <= 0,
+          dealUrl: d.dealUrl, // Importante: Añado dealUrl a GameDeal
         );
       }).toList();
 
@@ -1293,64 +1283,78 @@ class _PriceCompareModule extends StatelessWidget {
           final isLast = deal == deals.last;
           return Column(
             children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 8),
-                child: Row(
-                  children: [
-                    // Icono de tienda
-                    Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: BoxDecoration(
-                        color: cfg.background,
-                        borderRadius: BorderRadius.circular(7),
-                      ),
-                      child: Icon(cfg.icon, size: 13, color: cfg.color),
-                    ),
-                    const SizedBox(width: 10),
-
-                    // Nombre de tienda
-                    Expanded(
-                      child: Text(
-                        cfg.name,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: _textMain,
+              GestureDetector(
+                onTap: deal.dealUrl != null ? () async {
+                  final uri = Uri.parse(deal.dealUrl!);
+                  try {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  } catch (_) {}
+                } : null,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    children: [
+                      // Icono de tienda
+                      Container(
+                        padding: const EdgeInsets.all(5),
+                        decoration: BoxDecoration(
+                          color: cfg.background,
+                          borderRadius: BorderRadius.circular(7),
                         ),
+                        child: Icon(cfg.icon, size: 13, color: cfg.color),
                       ),
-                    ),
+                      const SizedBox(width: 10),
 
-                    // Precio original tachado (si hay descuento)
-                    if (!deal.isFree && deal.discountPercent > 0) ...
-                      [
-                        Text(
-                          deal.originalPriceLabel,
+                      // Nombre de tienda
+                      Expanded(
+                        child: Text(
+                          deal.storeName ?? cfg.name,
                           style: const TextStyle(
-                            fontSize: 10,
-                            color: _textMuted,
-                            decoration: TextDecoration.lineThrough,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: _textMain,
                           ),
                         ),
-                        const SizedBox(width: 6),
-                      ],
-
-                    // Precio actual
-                    Text(
-                      deal.salePriceLabel,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: deal.isFree ? _green : _textMain,
                       ),
-                    ),
 
-                    // Badge de descuento
-                    if (deal.discountPercent > 0) ...
-                      [
+                      // Precio original tachado (si hay descuento)
+                      if (!deal.isFree && deal.discountPercent > 0) ...
+                        [
+                          Text(
+                            deal.originalPriceLabel,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: _textMuted,
+                              decoration: TextDecoration.lineThrough,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+
+                      // Precio actual
+                      Text(
+                        deal.salePriceLabel,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: deal.isFree ? _green : _textMain,
+                        ),
+                      ),
+
+                      // Badge de descuento
+                      if (deal.discountPercent > 0) ...
+                        [
+                          const SizedBox(width: 8),
+                          DiscountBadge(deal: deal, small: true),
+                        ],
+                      
+                      // Flecha para indicar que es un enlace
+                      if (deal.dealUrl != null) ...[
                         const SizedBox(width: 8),
-                        DiscountBadge(deal: deal, small: true),
+                        const Icon(Icons.open_in_new_rounded, size: 12, color: _textSub),
                       ],
-                  ],
+                    ],
+                  ),
                 ),
               ),
               if (!isLast)

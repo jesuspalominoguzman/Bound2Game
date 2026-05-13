@@ -579,6 +579,20 @@ class ApiService {
         .toList();
   }
 
+  /// GET /api/games/deals/:title
+  static Future<List<Deal>> fetchDealsByGame(String title) async {
+    final uri = Uri.parse('$baseUrl/api/games/deals/${Uri.encodeComponent(title)}');
+    final r = await http
+        .get(uri, headers: await _headers())
+        .timeout(_timeout);
+
+    final data  = _parse(r);
+    final deals = (data['deals'] as List?) ?? [];
+    return deals
+        .map((d) => Deal.fromJson(d as Map<String, dynamic>))
+        .toList();
+  }
+
   /// GET /api/games/upcoming
   static Future<List<Deal>> fetchUpcomingGames() async {
     final r = await http

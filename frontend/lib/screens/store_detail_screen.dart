@@ -4,12 +4,12 @@
 // =============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../models/deal_model.dart';
 import '../models/game_model.dart';
-import '../widgets/discount_badge.dart';
 import '../widgets/advanced_filters_modal.dart';
 import '../widgets/store_logo.dart';
-import 'game_detail_screen.dart';
+import '../services/api_service.dart';
 
 // ── Tokens ────────────────────────────────────────────────────────────────────
 const _bg      = Color(0xFF101010);
@@ -20,36 +20,13 @@ const _textMain  = Color(0xFFD1D1D1);
 const _textMuted = Color(0xFF555555);
 const _green   = Color(0xFF4AF626);
 
-// ── Helpers: cruzar GameDeal con sampleGames ──────────────────────────────────
-final List<GameDeal> sampleDeals = []; // TODO: Fetch from ApiService
-
-Platform _storeToGamePlatform(DealStore store) {
-  switch (store) {
-    case DealStore.steam:        return Platform.steam;
-    case DealStore.epic:         return Platform.epic;
-    case DealStore.instantGaming:return Platform.ig;
-    default:                     return Platform.integrated;
-  }
+Future<void> _launchDealUrl(String? url) async {
+  if (url == null || url.isEmpty) return;
+  final uri = Uri.parse(url);
+  try {
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  } catch (_) {}
 }
-
-Game _dealToGame(GameDeal deal) => Game(
-  id: int.tryParse(deal.gameId) ?? 9999,
-  title: deal.gameTitle,
-  platform: _storeToGamePlatform(deal.store),
-  genre: deal.genre ?? 'Varios',
-  playtime: 0,
-  status: GameStatus.unplayed,
-  cover: deal.gameCover ?? '',
-  pcReq: PcReq.green,
-  hasCosmetics: false,
-  price: deal.originalPrice,
-  year: DateTime.now().year,
-);
-
-Game _resolveGame(GameDeal deal) => sampleGames.firstWhere(
-  (g) => g.id.toString() == deal.gameId,
-  orElse: () => _dealToGame(deal),
-);
 
 // =============================================================================
 // StoreDetailScreen
@@ -65,54 +42,56 @@ class StoreDetailScreen extends StatefulWidget {
 
 class _StoreDetailScreenState extends State<StoreDetailScreen> {
   LibraryFilters _filters = const LibraryFilters(priceEnabled: false);
+  late Future<List<Deal>> _dealsFuture;
+  List<Deal> _allDeals = [];
 
   DealStore get _store => widget.store;
   DealStoreConfig get _cfg => _store.config;
 
+  @override
+  void initState() {
+    super.initState();
+    _dealsFuture = _fetchStoreDeals();
+  }
+
+  Future<List<Deal>> _fetchStoreDeals() async {
+    final deals = await ApiService.fetchDeals(limit: 200);
+    // Filtrar solo los de la tienda
+    _allDeals = deals.where((d) => d.storeEnum == _store).toList();
+    return _allDeals;
+  }
+
   // ── Lista filtrada ─────────────────────────────────────────────────────────
 
-  List<GameDeal> get _filtered {
-    return sampleDeals.where((d) {
-      if (d.store != _store) return false;
-
+  List<Deal> get _filtered {
+    return _allDeals.where((d) {
       // Precio
       if (_filters.priceEnabled && d.salePrice > _filters.maxPrice) return false;
 
-      // Género
+      // Género: Deal no tiene genre por defecto
       if (_filters.genreEnabled && _filters.genres.isNotEmpty) {
-        if (d.genre == null) return false;
-        if (!_filters.genres.any((g) => d.genre!.toLowerCase().contains(g.toLowerCase()))) return false;
-      }
-
-      // Modo
-      if (_filters.modalityEnabled && _filters.modalities.isNotEmpty) {
-        final wantsMulti = _filters.modalities.contains(FilterModality.multi);
-        final wantsSingle = _filters.modalities.contains(FilterModality.single);
-        final isMulti = d.playerMode == PlayerMode.multi;
-        if (wantsMulti && !isMulti) return false;
-        if (wantsSingle && isMulti) return false;
+        return false; // Por ahora no filtramos por género si no lo tenemos de API
       }
 
       return true;
     }).toList()
-      ..sort((a, b) => b.discountPercent.compareTo(a.discountPercent));
+      ..sort((a, b) => b.calculatedDiscount.compareTo(a.calculatedDiscount));
   }
 
   List<String> get _availableGenres {
-    final genres = sampleDeals
-        .where((d) => d.store == _store && d.genre != null)
-        .map((d) => d.genre!)
-        .toSet()
-        .toList()
-      ..sort();
-    return genres;
+    return []; // No disponemos de géneros en la vista de Deals
   }
 
   // ── Build ──────────────────────────────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
-    final deals = _filtered;
+    return FutureBuilder<List<Deal>>(
+      future: _dealsFuture,
+      builder: (context, snapshot) {
+        final isLoading = snapshot.connectionState == ConnectionState.waiting;
+        final deals = isLoading ? <Deal>[] : _filtered;
+
     return Scaffold(
       backgroundColor: _bg,
       body: CustomScrollView(
@@ -210,8 +189,11 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                         const SizedBox(height: 3),
 
                         // Contador de ofertas
-                        Text(
-                          '${sampleDeals.where((d) => d.store == _store).length} ofertas disponibles',
+                        if (isLoading)
+                          SizedBox(width: 16, height: 16, child: CircularProgressIndicator(color: _cfg.color, strokeWidth: 2))
+                        else
+                          Text(
+                            '${_allDeals.length} ofertas disponibles',
                           style: TextStyle(
                             fontSize: 11,
                             color: _cfg.color,
@@ -258,18 +240,16 @@ class _StoreDetailScreenState extends State<StoreDetailScreen> {
                   (ctx, i) => _DealGridCard(
                     deal: deals[i],
                     storeColor: _cfg.color,
-                    onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => GameDetailScreen(baseGame: _resolveGame(deals[i])),
-                      ),
-                    ),
+                    onTap: () => _launchDealUrl(deals[i].dealUrl),
                   ),
                   childCount: deals.length,
                 ),
               ),
             ),
-        ],
-      ),
+          ],
+        ),
+      );
+      },
     );
   }
 }
@@ -284,7 +264,7 @@ class _DealGridCard extends StatelessWidget {
   const _DealGridCard({
     required this.deal, required this.storeColor, required this.onTap,
   });
-  final GameDeal deal;
+  final Deal deal;
   final Color storeColor;
   final VoidCallback onTap;
 
@@ -297,7 +277,7 @@ class _DealGridCard extends StatelessWidget {
           color: _bgCard,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: deal.isFree
+            color: deal.salePrice <= 0
                 ? _green.withValues(alpha: 0.3)
                 : _border,
           ),
@@ -309,9 +289,9 @@ class _DealGridCard extends StatelessWidget {
             Expanded(
               child: ClipRRect(
                 borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                child: deal.gameCover != null
+                child: deal.thumbUrl.isNotEmpty
                     ? Image.network(
-                        deal.gameCover!,
+                        deal.thumbUrl,
                         fit: BoxFit.cover,
                         width: double.infinity,
                         errorBuilder: (context, error, stackTrace) =>
@@ -329,7 +309,7 @@ class _DealGridCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    deal.gameTitle,
+                    deal.title,
                     style: const TextStyle(
                       fontSize: 11, fontWeight: FontWeight.w700, color: _textMain,
                     ),
@@ -344,35 +324,33 @@ class _DealGridCard extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            if (!deal.isFree && deal.discountPercent > 0)
+                            if (deal.salePrice > 0 && deal.calculatedDiscount > 0)
                               Text(
-                                deal.originalPriceLabel,
+                                '${deal.normalPrice.toStringAsFixed(2)} €',
                                 style: const TextStyle(
                                   fontSize: 9, color: _textMuted,
                                   decoration: TextDecoration.lineThrough,
                                 ),
                               ),
                             Text(
-                              deal.salePriceLabel,
+                              deal.salePrice <= 0 ? 'GRATIS' : '${deal.salePrice.toStringAsFixed(2)} €',
                               style: TextStyle(
                                 fontSize: 13, fontWeight: FontWeight.w900,
-                                color: deal.isFree ? _green : _textMain,
+                                color: deal.salePrice <= 0 ? _green : _textMain,
                               ),
                             ),
                           ],
                         ),
                       ),
                       // Badge descuento
-                      if (deal.discountPercent > 0)
-                        DiscountBadge(deal: deal, small: true),
+                      if (deal.calculatedDiscount > 0)
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                          decoration: BoxDecoration(color: _green, borderRadius: BorderRadius.circular(4)),
+                          child: Text('-${deal.calculatedDiscount}%', style: const TextStyle(fontSize: 9, fontWeight: FontWeight.w900, color: Colors.black)),
+                        ),
                     ],
                   ),
-                  // Género
-                  if (deal.genre != null) ...[
-                    const SizedBox(height: 4),
-                    Text(deal.genre!,
-                        style: const TextStyle(fontSize: 9, color: _textMuted)),
-                  ],
                 ],
               ),
             ),

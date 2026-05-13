@@ -15,4 +15,7 @@ router.get('/free', dealController.getFreeGames);
 // GET /api/games/upcoming         → Próximos lanzamientos
 router.get('/upcoming', dealController.getUpcomingGames);
 
+// GET /api/games/deals/:title     → Ofertas para un juego específico
+router.get('/deals/:title', dealController.getDealsByGame);
+
 module.exports = router;
