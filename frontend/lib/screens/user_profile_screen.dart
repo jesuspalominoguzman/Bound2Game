@@ -37,7 +37,9 @@ class UserProfileScreen extends StatefulWidget {
 }
 
 class _UserProfileScreenState extends State<UserProfileScreen> {
-  late Future<User> _profileFuture;
+  User? _user;
+  bool _isLoadingProfile = true;
+  String? _profileError;
   late Future<List<ApiGame>> _libraryFuture;
   Color _dominantColor = _yellow;
 
@@ -45,12 +47,29 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   void initState() {
     super.initState();
     // Cargar perfil completo (Karma, Amigos, PC, Steam ID)
-    _profileFuture = ApiService.getUserProfilePublic(widget.user.id).then((u) {
-      _updatePalette(u.avatarUrl);
-      return u;
-    });
+    _loadProfile();
     // Cargar biblioteca (Intenta cargar completa, si no son amigos fallback a preview)
     _libraryFuture = _loadLibrary();
+  }
+
+  Future<void> _loadProfile() async {
+    try {
+      final u = await ApiService.getUserProfilePublic(widget.user.id);
+      _updatePalette(u.avatarUrl);
+      if (mounted) {
+        setState(() {
+          _user = u;
+          _isLoadingProfile = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _profileError = e.toString();
+          _isLoadingProfile = false;
+        });
+      }
+    }
   }
 
   Future<void> _updatePalette(String? url) async {
@@ -74,25 +93,76 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     }
   }
 
+  Future<void> _rateUser(User u, String action) async {
+    final oldRating = u.userRating;
+    final oldKarma = u.karma;
+    
+    int newKarma = oldKarma;
+    String newRating = 'none';
+
+    if (action == 'like') {
+      if (oldRating == 'like') {
+        newRating = 'none';
+        newKarma--;
+      } else {
+        newRating = 'like';
+        newKarma += (oldRating == 'dislike' ? 2 : 1);
+      }
+    } else {
+      if (oldRating == 'dislike') {
+        newRating = 'none';
+        newKarma++;
+      } else {
+        newRating = 'dislike';
+        newKarma -= (oldRating == 'like' ? 2 : 1);
+      }
+    }
+
+    setState(() {
+      _user = u.copyWith(karma: newKarma, userRating: newRating);
+    });
+
+    try {
+      final res = await ApiService.rateUser(u.id, action);
+      if (mounted) {
+        setState(() {
+          _user = u.copyWith(
+            karma: res['karma'] as int,
+            userRating: res['userRating'] as String,
+          );
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _user = u.copyWith(karma: oldKarma, userRating: oldRating);
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al valorar usuario: $e', style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+            backgroundColor: _yellow,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    // Usamos el usuario original hasta que cargue el completo para mantener la UI fluida
+    final u = _user ?? widget.user;
+
     return Scaffold(
       backgroundColor: _bg,
-      body: FutureBuilder<User>(
-        future: _profileFuture,
-        builder: (context, snapshot) {
-          // Usamos el usuario original hasta que cargue el completo para mantener la UI fluida
-          final u = snapshot.data ?? widget.user;
-          final isLoadingProfile = snapshot.connectionState == ConnectionState.waiting;
+      body: CustomScrollView(
+        physics: const BouncingScrollPhysics(),
+        slivers: [
+          // ── Top Gradient y Avatar ──────────────────────────────────────
+          _buildAppBar(u),
 
-          return CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              // ── Top Gradient y Avatar ──────────────────────────────────────
-              _buildAppBar(u),
-
-              // ── Indicador de carga si está buscando datos ──────────────────
-              if (isLoadingProfile)
+          // ── Indicador de carga si está buscando datos ──────────────────
+          if (_isLoadingProfile)
                 const SliverToBoxAdapter(
                   child: Padding(
                     padding: EdgeInsets.all(24.0),
@@ -105,6 +175,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                 // ── Estadísticas rápidas (Amigos, Karma) ─────────────────────
                 _buildStats(u),
+
+                // ── Acciones de Karma (Like / Dislike) ───────────────────────
+                _buildKarmaActions(u),
 
                 // ── Plataformas ──────────────────────────────────────────────
                 const SliverToBoxAdapter(
@@ -240,9 +313,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                   },
                 ),
               ],
-            ],
-          );
-        },
+        ],
       ),
     );
   }
@@ -370,6 +441,34 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
           children: [
             _StatWidget(label: 'AMIGOS', value: '${u.friendsCount}', icon: Icons.group_rounded),
             _StatWidget(label: 'KARMA', value: '${u.karma}', icon: Icons.star_rounded, isHighlighted: true),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKarmaActions(User u) {
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _KarmaButton(
+              icon: Icons.thumb_up_rounded,
+              label: 'Like',
+              isActive: u.userRating == 'like',
+              color: const Color(0xFF00E676),
+              onTap: () => _rateUser(u, 'like'),
+            ),
+            const SizedBox(width: 16),
+            _KarmaButton(
+              icon: Icons.thumb_down_rounded,
+              label: 'Dislike',
+              isActive: u.userRating == 'dislike',
+              color: const Color(0xFFFF1744),
+              onTap: () => _rateUser(u, 'dislike'),
+            ),
           ],
         ),
       ),
@@ -698,8 +797,8 @@ class _PlatformCard extends StatelessWidget {
     Clipboard.setData(ClipboardData(text: nickname));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('ID copiado al portapapeles'),
-        backgroundColor: _bgCard,
+        content: Text('ID copiado al portapapeles', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        backgroundColor: _yellow,
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: 2),
       ),
@@ -750,6 +849,46 @@ class _PlatformCard extends StatelessWidget {
               size: 18,
               color: isOwnProfile ? _textSub : iconColor.withValues(alpha: 0.8),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _KarmaButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool isActive;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _KarmaButton({
+    required this.icon,
+    required this.label,
+    required this.isActive,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? color.withValues(alpha: 0.2) : _bgCard,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isActive ? color : _border),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: isActive ? color : _textSub, size: 18),
+            const SizedBox(width: 8),
+            Text(label, style: TextStyle(color: isActive ? color : _textSub, fontWeight: FontWeight.bold)),
           ],
         ),
       ),

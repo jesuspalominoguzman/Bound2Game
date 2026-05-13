@@ -71,4 +71,7 @@ router.get   ('/:userId/library-preview',     authMiddleware, userController.get
 // GET /api/users/:userId/profile-public — Info pública del perfil
 router.get   ('/:userId/profile-public',      authMiddleware, userController.getUserProfilePublic);
 
+// POST /api/users/:userId/rate — Valorar (like/dislike) a un usuario
+router.post  ('/:userId/rate',                authMiddleware, userController.rateUser);
+
 module.exports = router;

@@ -13,6 +13,7 @@ import '../services/api_service.dart';
 import '../models/user_model.dart';
 import '../models/game_model.dart' hide User;
 import 'game_detail_screen.dart';
+import 'user_profile_screen.dart';
 
 // ── Paleta negro/amarillo ─────────────────────────────────────────────────────
 const _bg        = Color(0xFF121212);
@@ -149,7 +150,7 @@ class _UserTileState extends State<_UserTile> {
     _status = widget.initialStatus;
   }
 
-  // ── Abre la pantalla de juegos del usuario (disponible para todos) ──────────
+  // ── Abre la pantalla de perfil del usuario (disponible para todos) ──────────
   void _openGames(BuildContext ctx) {
     final minUser = User(
       id: widget.user.id,
@@ -157,7 +158,7 @@ class _UserTileState extends State<_UserTile> {
       avatarUrl: widget.user.avatarUrl,
     );
     Navigator.of(ctx).push(MaterialPageRoute(
-      builder: (_) => _UserGamesPreviewScreen(user: minUser),
+      builder: (_) => UserProfileScreen(user: minUser),
     ));
   }
 
@@ -340,270 +341,7 @@ class _FriendButton extends StatelessWidget {
   }
 }
 
-// =============================================================================
-// Pantalla de vista previa de juegos (accesible sin amistad)
-// =============================================================================
 
-class _UserGamesPreviewScreen extends StatefulWidget {
-  const _UserGamesPreviewScreen({required this.user});
-  final User user;
-
-  @override
-  State<_UserGamesPreviewScreen> createState() => _UserGamesPreviewScreenState();
-}
-
-class _UserGamesPreviewScreenState extends State<_UserGamesPreviewScreen> {
-  late Future<List<ApiGame>> _future;
-
-  @override
-  void initState() {
-    super.initState();
-    _future = ApiService.getUserLibraryPreview(widget.user.id);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: _bg,
-      appBar: AppBar(
-        backgroundColor: _bgSearch,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _textMain, size: 20),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Juegos de ${widget.user.username}',
-              style: const TextStyle(color: _textMain, fontSize: 16, fontWeight: FontWeight.w700)),
-            const Text('Biblioteca del jugador',
-              style: TextStyle(color: _textSub, fontSize: 11)),
-          ],
-        ),
-        // Badge amarillo con el username
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 16),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: _yellowDim,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: _yellow.withValues(alpha: 0.4)),
-              ),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                const Icon(Icons.videogame_asset_rounded, color: _yellow, size: 14),
-                const SizedBox(width: 5),
-                const Text('Biblioteca', style: TextStyle(color: _yellow, fontSize: 11, fontWeight: FontWeight.w600)),
-              ]),
-            ),
-          ),
-        ],
-      ),
-      body: FutureBuilder<List<ApiGame>>(
-        future: _future,
-        builder: (ctx, snap) {
-          if (snap.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator(color: _yellow, strokeWidth: 2));
-          }
-          if (snap.hasError) {
-            return Center(child: Padding(
-              padding: const EdgeInsets.all(32),
-              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-                const Icon(Icons.error_outline_rounded, color: _textSub, size: 48),
-                const SizedBox(height: 16),
-                Text(snap.error.toString(),
-                  style: const TextStyle(color: _textSub, fontSize: 13),
-                  textAlign: TextAlign.center),
-              ]),
-            ));
-          }
-
-          final games = snap.data ?? [];
-
-          if (games.isEmpty) {
-            return Center(child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-              Container(
-                width: 80, height: 80,
-                decoration: BoxDecoration(color: _yellowDim, shape: BoxShape.circle,
-                  border: Border.all(color: _yellow.withValues(alpha: 0.3))),
-                child: const Icon(Icons.videogame_asset_off_rounded, color: _yellow, size: 36),
-              ),
-              const SizedBox(height: 24),
-              Text('${widget.user.username} aún no tiene\njuegos en su biblioteca',
-                style: const TextStyle(color: _textMain, fontSize: 15, fontWeight: FontWeight.w700, height: 1.5),
-                textAlign: TextAlign.center),
-            ]));
-          }
-
-          return CustomScrollView(
-            physics: const BouncingScrollPhysics(),
-            slivers: [
-              SliverPadding(
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
-                sliver: SliverToBoxAdapter(
-                  child: Row(children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                      decoration: BoxDecoration(color: _yellowDim, borderRadius: BorderRadius.circular(20)),
-                      child: Text('${games.length} juego${games.length == 1 ? '' : 's'}',
-                        style: const TextStyle(color: _yellow, fontSize: 12, fontWeight: FontWeight.w700)),
-                    ),
-                  ]),
-                ),
-              ),
-              SliverPadding(
-                padding: const EdgeInsets.all(16),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (ctx, i) => _PreviewGameTile(game: games[i]),
-                    childCount: games.length,
-                  ),
-                ),
-              ),
-              const SliverToBoxAdapter(child: SizedBox(height: 80)),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
-// =============================================================================
-// Tile de juego en la vista previa
-// =============================================================================
-
-class _PreviewGameTile extends StatefulWidget {
-  const _PreviewGameTile({required this.game});
-  final ApiGame game;
-
-  @override
-  State<_PreviewGameTile> createState() => _PreviewGameTileState();
-}
-
-class _PreviewGameTileState extends State<_PreviewGameTile> {
-  bool _pressed = false;
-
-  void _openDetail() {
-    final g = Game(
-      id:       widget.game.id.hashCode,
-      entryId:  widget.game.entryId,
-      title:    widget.game.title,
-      platform: Platform.steam,
-      genre:    '',
-      playtime: 0,
-      status:   GameStatus.unplayed,
-      cover:    widget.game.coverUrl,
-      pcReq:    PcReq.yellow,
-      hasCosmetics: false,
-      price:    double.tryParse(widget.game.currentPrice ?? '0') ?? 0,
-      year:     0,
-      hltb: widget.game.hltbMainStory != null
-          ? HltbTimes(main: widget.game.hltbMainStory!.toInt())
-          : null,
-    );
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => GameDetailScreen(baseGame: g)));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTapDown:   (_) => setState(() => _pressed = true),
-      onTapUp:     (_) { setState(() => _pressed = false); _openDetail(); },
-      onTapCancel: ()  => setState(() => _pressed = false),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 140),
-        margin: const EdgeInsets.only(bottom: 10),
-        decoration: BoxDecoration(
-          color: _pressed ? const Color(0xFF222222) : _bgCard,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: _pressed ? _yellow.withValues(alpha: 0.4) : _border,
-            width: _pressed ? 1.5 : 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            // Portada
-            ClipRRect(
-              borderRadius: const BorderRadius.horizontal(left: Radius.circular(13)),
-              child: Image.network(
-                widget.game.coverUrl,
-                width: 70, height: 70,
-                fit: BoxFit.cover,
-                errorBuilder: (_, _, _) => Container(
-                  width: 70, height: 70,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF111111),
-                    borderRadius: const BorderRadius.horizontal(left: Radius.circular(13)),
-                  ),
-                  child: const Icon(Icons.videogame_asset_rounded, color: Color(0xFF333333), size: 26),
-                ),
-              ),
-            ),
-            const SizedBox(width: 14),
-            // Info
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 2),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(widget.game.title,
-                      style: const TextStyle(color: _textMain, fontSize: 14, fontWeight: FontWeight.w700),
-                      maxLines: 1, overflow: TextOverflow.ellipsis),
-                    if (widget.game.hltbMainStory != null) ...[
-                      const SizedBox(height: 4),
-                      Row(children: [
-                        const Icon(Icons.timer_outlined, color: _yellow, size: 12),
-                        const SizedBox(width: 4),
-                        Text('~${widget.game.hltbMainStory!.toStringAsFixed(0)}h historia',
-                          style: const TextStyle(color: _textSub, fontSize: 11)),
-                      ]),
-                    ],
-                    if (widget.game.status != null) ...[
-                      const SizedBox(height: 4),
-                      _StatusChip(status: widget.game.status!),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-            const Padding(
-              padding: EdgeInsets.only(right: 12),
-              child: Icon(Icons.chevron_right_rounded, color: Color(0xFF444444), size: 20),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _StatusChip extends StatelessWidget {
-  const _StatusChip({required this.status});
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, color) = switch (status) {
-      'Playing'   => ('Jugando',     const Color(0xFF4A6CF7)),
-      'Completed' => ('Completado',  const Color(0xFF4AF626)),
-      'Abandoned' => ('Abandonado',  const Color(0xFFFF4040)),
-      _           => ('Backlog',     const Color(0xFF888888)),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.15),
-        borderRadius: BorderRadius.circular(6),
-      ),
-      child: Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.w600)),
-    );
-  }
-}
 
 // =============================================================================
 // Estados vacíos / error

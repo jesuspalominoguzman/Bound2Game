@@ -496,7 +496,7 @@ const getUserProfilePublic = async (req, res) => {
         }
 
         const targetUser = await User.findById(userId)
-            .select('username avatarUrl bio karma reputation steamId epicId xboxId discordId pcComponents isOnline friends')
+            .select('username avatarUrl bio karma reputation steamId epicId xboxId discordId pcComponents isOnline friends likedBy dislikedBy')
             .lean();
 
         if (!targetUser) {
@@ -504,6 +504,13 @@ const getUserProfilePublic = async (req, res) => {
         }
 
         const friendsCount = targetUser.friends ? targetUser.friends.length : 0;
+        
+        let userRating = 'none';
+        if (targetUser.likedBy && targetUser.likedBy.map(id => id.toString()).includes(req.user.id)) {
+            userRating = 'like';
+        } else if (targetUser.dislikedBy && targetUser.dislikedBy.map(id => id.toString()).includes(req.user.id)) {
+            userRating = 'dislike';
+        }
 
         return res.status(200).json({
             message: 'Perfil público recuperado con éxito',
@@ -520,7 +527,8 @@ const getUserProfilePublic = async (req, res) => {
                 discordId: targetUser.discordId,
                 pcComponents: targetUser.pcComponents,
                 isOnline: targetUser.isOnline,
-                friendsCount: friendsCount
+                friendsCount: friendsCount,
+                userRating: userRating
             }
         });
     } catch (error) {
@@ -554,6 +562,80 @@ const updateFcmToken = async (req, res) => {
     }
 };
 
+/**
+ * POST /api/users/:userId/rate
+ * Permite a un usuario dar like o dislike a otro perfil.
+ */
+const rateUser = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { action } = req.body; // 'like' o 'dislike'
+        const raterId = req.user.id;
+
+        if (userId === raterId) {
+            return res.status(400).json({ error: 'No puedes valorarte a ti mismo' });
+        }
+
+        if (!['like', 'dislike'].includes(action)) {
+            return res.status(400).json({ error: 'Acción inválida. Debe ser like o dislike' });
+        }
+
+        const targetUser = await User.findById(userId);
+        if (!targetUser) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        // Inicializar arreglos si no existen
+        if (!targetUser.likedBy) targetUser.likedBy = [];
+        if (!targetUser.dislikedBy) targetUser.dislikedBy = [];
+
+        const hasLiked = targetUser.likedBy.map(id => id.toString()).includes(raterId);
+        const hasDisliked = targetUser.dislikedBy.map(id => id.toString()).includes(raterId);
+
+        let newRating = 'none';
+
+        if (action === 'like') {
+            if (hasLiked) {
+                // Toggle off
+                targetUser.likedBy = targetUser.likedBy.filter(id => id.toString() !== raterId);
+            } else {
+                // Add like
+                targetUser.likedBy.push(raterId);
+                newRating = 'like';
+                if (hasDisliked) {
+                    targetUser.dislikedBy = targetUser.dislikedBy.filter(id => id.toString() !== raterId);
+                }
+            }
+        } else if (action === 'dislike') {
+            if (hasDisliked) {
+                // Toggle off
+                targetUser.dislikedBy = targetUser.dislikedBy.filter(id => id.toString() !== raterId);
+            } else {
+                // Add dislike
+                targetUser.dislikedBy.push(raterId);
+                newRating = 'dislike';
+                if (hasLiked) {
+                    targetUser.likedBy = targetUser.likedBy.filter(id => id.toString() !== raterId);
+                }
+            }
+        }
+
+        // Recalcular karma
+        targetUser.karma = targetUser.likedBy.length - targetUser.dislikedBy.length;
+
+        await targetUser.save();
+
+        return res.status(200).json({
+            message: 'Valoración actualizada',
+            karma: targetUser.karma,
+            userRating: newRating
+        });
+    } catch (error) {
+        console.error('Error en rateUser:', error);
+        return res.status(500).json({ error: 'Error interno al valorar al usuario' });
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
@@ -567,5 +649,6 @@ module.exports = {
     getPendingRequests,
     getUserProfilePublic,
     updatePlatforms,
-    updateFcmToken
+    updateFcmToken,
+    rateUser
 };

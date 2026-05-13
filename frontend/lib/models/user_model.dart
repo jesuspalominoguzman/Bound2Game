@@ -27,6 +27,7 @@ class User {
   final String? xboxId;
   final String? discordId;
   final int friendsCount;
+  final String? userRating; // 'like', 'dislike', or 'none'
 
   const User({
     required this.id,
@@ -45,6 +46,7 @@ class User {
     this.xboxId,
     this.discordId,
     this.friendsCount = 0,
+    this.userRating,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -81,6 +83,7 @@ class User {
       xboxId: json['xboxId']?.toString(),
       discordId: json['discordId']?.toString(),
       friendsCount: (json['friendsCount'] as num?)?.toInt() ?? friendsList.length,
+      userRating: json['userRating']?.toString(),
     );
   }
 
@@ -117,6 +120,8 @@ class User {
     String? discordId,
     int? friendsCount,
     Map<String, dynamic>? pcComponents,
+    String? userRating,
+    int? karma,
   }) {
     return User(
       id: id,
@@ -124,7 +129,7 @@ class User {
       email: email,
       avatarUrl: avatarUrl,
       bio: bio,
-      karma: karma,
+      karma: karma ?? this.karma,
       pcComponents: pcComponents ?? Map<String, dynamic>.from(this.pcComponents),
       friends: friends,
       recentGames: recentGames,
@@ -135,6 +140,7 @@ class User {
       xboxId: xboxId ?? this.xboxId,
       discordId: discordId ?? this.discordId,
       friendsCount: friendsCount ?? this.friendsCount,
+      userRating: userRating ?? this.userRating,
     );
   }
 }

@@ -488,6 +488,19 @@ class ApiService {
     return User.fromJson(data['profile'] as Map<String, dynamic>);
   }
 
+  /// POST /api/users/:userId/rate
+  static Future<Map<String, dynamic>> rateUser(String userId, String action) async {
+    final r = await http
+        .post(
+          Uri.parse('$baseUrl/api/users/$userId/rate'),
+          headers: await _headers(withAuth: true),
+          body: jsonEncode({'action': action}),
+        )
+        .timeout(_timeout);
+
+    return _parse(r);
+  }
+
   /// GET /api/users/search?q=... — Buscar usuarios en la BD (regex insensible)
   static Future<List<UserSearchResult>> searchUsers(String q) async {
     if (q.isEmpty) return [];

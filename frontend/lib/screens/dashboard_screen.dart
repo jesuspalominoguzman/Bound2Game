@@ -604,40 +604,22 @@ class _UserCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        user.username,
-                        style: GoogleFonts.inter(
-                          fontSize: 13,
-                          color: _kWhite,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Row(children: [
-                        const Icon(Icons.star_rounded, size: 11, color: _kYellow),
-                        const SizedBox(width: 2),
-                        Text(
-                          '${user.karma}',
-                          style: GoogleFonts.inter(fontSize: 11, color: _kMuted),
-                        ),
-                      ]),
-                    ],
+                  Text(
+                    user.username,
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      color: _kWhite,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Karma',
+                    'En línea ahora',
                     style: GoogleFonts.inter(
-                      fontSize: 11,
-                      color: _kYellow,
+                      fontSize: 12,
+                      color: kOnlineGreen,
                       fontWeight: FontWeight.w500,
                     ),
-                  ),
-                  const SizedBox(height: 3),
-                  Text(
-                    '${user.friends.length} amigos',
-                    style: GoogleFonts.inter(fontSize: 10, color: _kSub),
                   ),
                 ],
               ),

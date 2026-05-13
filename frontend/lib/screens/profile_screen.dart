@@ -356,8 +356,6 @@ class ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  // _buildStats se mantiene
-
 
   Widget _buildEmptyLibrary(User u) {
     return SliverToBoxAdapter(
@@ -702,8 +700,8 @@ class _PlatformCard extends StatelessWidget {
     Clipboard.setData(ClipboardData(text: nickname));
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('ID copiado al portapapeles'),
-        backgroundColor: _bgCard,
+        content: Text('ID copiado al portapapeles', style: TextStyle(color: Colors.black, fontWeight: FontWeight.bold)),
+        backgroundColor: _yellow,
         behavior: SnackBarBehavior.floating,
         duration: Duration(seconds: 2),
       ),
