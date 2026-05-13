@@ -1,9 +1,5 @@
-// =============================================================================
-// main.dart — Bound2Game Flutter (Android)
-//
-// Punto de entrada principal de la aplicación.
-// Configura el tema oscuro, el título y el widget raíz.
-// =============================================================================
+// Este es el punto de entrada principal de la aplicación.
+// Aquí es donde arranca todo: cargamos las configuraciones, el tema y decidimos si el usuario tiene que loguearse o puede entrar directo.
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -17,29 +13,28 @@ import 'screens/shake_selector_screen.dart';
 import 'theme/app_theme.dart';
 import 'services/auth_service.dart';
 
-/// Key global para navegación sin contexto
+// Esta llave nos sirve para navegar por la app sin tener que pasar el "contexto" por todas partes.
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
-  // Garantiza que los bindings de Flutter estén inicializados antes de
-  // configurar la orientación y la barra de estado del sistema.
+  // Aseguramos que Flutter esté listo antes de tocar cosas del sistema como la orientación.
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Cargar variables de entorno
+  // Cargamos el archivo .env donde guardamos la URL de nuestra API.
   await dotenv.load(fileName: ".env");
 
-  // Forza orientación vertical (portrait) — app 100% móvil.
+  // Forzamos que la app solo se vea en vertical, porque en horizontal se nos descuadra todo.
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
 
-  // Barra de estado transparente con íconos claros (modo oscuro).
+  // Ponemos la barra de arriba transparente para que quede más moderno y los iconos en blanco.
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
-      systemNavigationBarColor: Color(0xFF303030), // AppColors.sidebar
+      systemNavigationBarColor: Color(0xFF303030), 
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
@@ -47,7 +42,7 @@ void main() async {
   runApp(const Bound2GameApp());
 }
 
-/// Widget raíz de la aplicación Bound2Game.
+// El widget raíz. Aquí es donde meto el detector de movimiento (acelerómetro).
 class Bound2GameApp extends StatefulWidget {
   const Bound2GameApp({super.key});
 
@@ -62,33 +57,31 @@ class _Bound2GameAppState extends State<Bound2GameApp> {
   @override
   void initState() {
     super.initState();
+    // Empezamos a escuchar por si el usuario agita el móvil.
     _initShakeListener();
   }
 
+  // Si el usuario agita el móvil con fuerza, le abrimos la pantalla mágica que elige un juego por él.
   void _initShakeListener() {
     _accelSub = accelerometerEventStream().listen((AccelerometerEvent event) {
       if (_isShaking) return;
 
-      // Calcular fuerza total
+      // Calculamos cuánta caña le está dando al móvil.
       final double force = event.x.abs() + event.y.abs() + event.z.abs();
       
       if (force > 25) {
         _isShaking = true;
         
-        // Ejecutar navegación
         if (navigatorKey.currentState != null) {
-          // Bloqueo simple: verificamos que la ruta actual no sea ya ShakeSelectorScreen
-          // (Esto se maneja empujando la ruta y esperando a que vuelva para desbloquear)
           navigatorKey.currentState!
               .push(MaterialPageRoute(builder: (_) => const ShakeSelectorScreen()))
               .then((_) {
-            // Cuando el usuario cierra la pantalla de Shake to Play, rehabilitamos el sacudido
+            // Cuando cierra la pantalla, esperamos un segundo para que pueda volver a agitarlo.
             Future.delayed(const Duration(seconds: 1), () {
               if (mounted) setState(() => _isShaking = false);
             });
           });
         } else {
-          // Fallback por si navigatorKey no está listo
           Future.delayed(const Duration(seconds: 1), () => _isShaking = false);
         }
       }
@@ -97,6 +90,7 @@ class _Bound2GameAppState extends State<Bound2GameApp> {
 
   @override
   void dispose() {
+    // Muy importante: cancelamos el acelerómetro al cerrar la app para no gastar batería.
     _accelSub?.cancel();
     super.dispose();
   }
@@ -105,28 +99,20 @@ class _Bound2GameAppState extends State<Bound2GameApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       navigatorKey: navigatorKey,
-      // ── Metadatos ────────────────────────────────────────────────────────
       title: 'Bound2Game',
       debugShowCheckedModeBanner: false,
 
-      // ── Tema ─────────────────────────────────────────────────────────────
-      // Se usa exclusivamente el tema oscuro; no se proporciona [theme]
-      // (light) para evitar que el sistema operativo lo active.
+      // Solo usamos el tema oscuro porque mola mucho más y cansa menos la vista.
       darkTheme: buildAppTheme(),
       themeMode: ThemeMode.dark,
 
-      // ── Pantalla inicial (AuthWrapper) ────────────────────────────────────
+      // El AuthWrapper decide si mandamos al usuario al login o al dashboard.
       home: const AuthWrapper(),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AUTH WRAPPER
-// Controlador principal de navegación de la app.
-// Decidirá si mostrar LoginScreen o MainLayout.
-// ─────────────────────────────────────────────────────────────────────────────
-
+// Este componente es el que mira si ya teníamos la sesión guardada del usuario.
 class AuthWrapper extends StatefulWidget {
   const AuthWrapper({super.key});
 
@@ -135,7 +121,7 @@ class AuthWrapper extends StatefulWidget {
 }
 
 class _AuthWrapperState extends State<AuthWrapper> {
-  // null = cargando, true = autenticado, false = no autenticado
+  // null mientras mira el disco, true si está logueado, false si no.
   bool? _isLoggedIn;
 
   @override
@@ -151,7 +137,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
 
   @override
   Widget build(BuildContext context) {
-    // Mientras carga el estado de sesión mostramos un splash mínimo
+    // Si todavía estamos mirando el estado, ponemos una pantalla de carga para que no se vea el fondo vacío.
     if (_isLoggedIn == null) {
       return const Scaffold(
         backgroundColor: Color(0xFF292929),
@@ -163,78 +149,7 @@ class _AuthWrapperState extends State<AuthWrapper> {
         ),
       );
     }
+    // Si está logueado, a la app. Si no, al login de cabeza.
     return _isLoggedIn! ? const MainLayout() : const LoginScreen();
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// PLACEHOLDER TEMPORAL
-// Se eliminará cuando se implemente la pantalla de inicio real.
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Pantalla provisional que verifica que el tema se aplica correctamente.
-/// Muestra el logotipo/nombre y los colores base de Bound2Game.
-class _SplashPlaceholder extends StatelessWidget {
-  const _SplashPlaceholder();
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // ── Icono / Logo ──────────────────────────────────────────────
-              Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: const Icon(
-                  Icons.sports_esports_rounded,
-                  color: Colors.white,
-                  size: 44,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // ── Nombre de la app ──────────────────────────────────────────
-              Text(
-                'Bound2Game',
-                style: theme.textTheme.headlineLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              // ── Subtítulo ─────────────────────────────────────────────────
-              Text(
-                'Tu biblioteca gaming, en tu bolsillo.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-              ),
-              const SizedBox(height: 48),
-
-              // ── Indicador de carga ────────────────────────────────────────
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2.5,
-                  color: theme.colorScheme.primary,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }

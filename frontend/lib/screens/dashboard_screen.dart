@@ -1,11 +1,5 @@
-// =============================================================================
-// dashboard_screen.dart — Bound2Game Flutter (Android)
-//
-// HomeScreen refactorizado. Principio "Menos es Más":
-//   - Eliminados: WelcomeBanner, SystemStatusCard, QuickActionsCard.
-//   - Protagonismo absoluto de los 4 StatCards (parrilla grande).
-//   - Paleta: fondo #292929, tarjetas #1A1A1A, acento #FFB800.
-// =============================================================================
+// Este es el Dashboard, lo primero que ves al abrir la app. He querido que sea muy limpio y que lo más importante (tus estadísticas) se vea bien grande.
+// He seguido un diseño minimalista con tarjetas oscuras y el amarillo para los detalles que quiero resaltar.
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -17,7 +11,7 @@ import 'chat_screen.dart';
 import 'game_detail_screen.dart';
 import 'library_screen.dart';
 
-// ── Paleta local (identidad visual definitiva) ────────────────────────────────
+// Mi paleta de colores para que todo quede conjuntado.
 const _kBgCard   = Color(0xFF1A1A1A);
 const _kBorder   = Color(0xFF2A2A2A);
 const _kYellow   = Color(0xFFFFB800);
@@ -25,16 +19,12 @@ const _kWhite    = Color(0xFFFFFFFF);
 const _kMuted    = Color(0xFFAAAAAA);
 const _kSub      = Color(0xFF666666);
 
-// ── Modelo de dato para las estadísticas (simplificado: sin icono) ───────────
+// Un pequeño modelo para no liarme con los datos de las estadísticas.
 class _StatData {
   const _StatData({required this.value, required this.description});
   final String value;
   final String description;
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// DASHBOARD SCREEN
-// ─────────────────────────────────────────────────────────────────────────────
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key, this.onNavigate});
@@ -45,16 +35,17 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class DashboardScreenState extends State<DashboardScreen> {
-  // Datos del usuario autenticado (cargados al init)
   String? _userId;
   Future<_DashboardData>? _future;
 
   @override
   void initState() {
     super.initState();
+    // Al arrancar, buscamos quién es el usuario actual.
     _loadUser();
   }
 
+  // Sacamos quién es el usuario que ha entrado para poder pedir sus datos al servidor.
   Future<void> _loadUser() async {
     final user = await AuthService.getCurrentUser();
     if (user != null && mounted) {
@@ -65,6 +56,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  // Aquí hacemos todas las peticiones a la vez: biblioteca, estadísticas y amigos. Así la app va más rápido.
   Future<_DashboardData> _fetchDashboard(String userId) async {
     final results = await Future.wait([
       ApiService.getLibrary(userId),
@@ -78,6 +70,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // Para cuando el usuario vuelve de otra pantalla y queremos que los números estén actualizados.
   void reloadDashboard() {
     if (!mounted) return;
     if (_userId != null) {
@@ -93,7 +86,6 @@ class DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
 
     if (_future == null) {
-      // Todavía cargando el userId de SharedPreferences
       return const Center(
         child: CircularProgressIndicator(color: _kYellow, strokeWidth: 2),
       );
@@ -121,6 +113,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             const _SectionLabel(text: 'MIS ESTADÍSTICAS'),
             const SizedBox(height: 12),
+            // La rejilla con los 4 números principales.
             _StatsGrid(stats: stats),
             const SizedBox(height: 32),
 
@@ -143,6 +136,7 @@ class DashboardScreenState extends State<DashboardScreen> {
               onTap: () => widget.onNavigate?.call(3),
             ),
             const SizedBox(height: 14),
+            // Amigos que están dándole caña ahora mismo.
             _ActiveUsersList(users: onlineUsers),
           ],
         );
@@ -151,7 +145,6 @@ class DashboardScreenState extends State<DashboardScreen> {
   }
 }
 
-// Agregado de datos del dashboard
 class _DashboardData {
   final List<ApiGame>  games;
   final LibraryStats   stats;
@@ -159,10 +152,7 @@ class _DashboardData {
   const _DashboardData({required this.games, required this.stats, required this.friends});
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SECTION LABEL — Etiqueta de categoría en mayúsculas
-// ─────────────────────────────────────────────────────────────────────────────
-
+// Un pequeño componente para poner las etiquetas de las categorías en mayúsculas.
 class _SectionLabel extends StatelessWidget {
   const _SectionLabel({required this.text});
   final String text;
@@ -181,10 +171,7 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// SECTION HEADER — Título + acción "Ver más"
-// ─────────────────────────────────────────────────────────────────────────────
-
+// Un pequeño componente para poner los títulos de las secciones y el botón de "Ver más".
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({
     required this.title,
@@ -225,10 +212,7 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STATS GRID — 4 tarjetas protagonistas en 2 columnas
-// ─────────────────────────────────────────────────────────────────────────────
-
+// La rejilla con los 4 números principales: total de juegos, horas, completados y pendientes.
 class _StatsGrid extends StatelessWidget {
   const _StatsGrid({required this.stats});
   final LibraryStats stats;
@@ -256,6 +240,7 @@ class _StatsGrid extends StatelessWidget {
   }
 }
 
+// Cada una de las tarjetas de estadísticas. He intentado que el número se vea bien grande.
 class _StatCard extends StatelessWidget {
   const _StatCard({required this.stat});
   final _StatData stat;
@@ -281,7 +266,6 @@ class _StatCard extends StatelessWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // ── Valor numérico grande ────────────────────────────────────
               Text(
                 stat.value,
                 style: GoogleFonts.inter(
@@ -292,7 +276,6 @@ class _StatCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 8),
-              // ── Descripción ──────────────────────────────────────────────
               Text(
                 stat.description,
                 textAlign: TextAlign.center,
@@ -313,10 +296,7 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// RECENT GAMES GRID — 2 columnas, aspecto 3:4
-// ─────────────────────────────────────────────────────────────────────────────
-
+// La rejilla para los juegos recientes. Uso un aspecto de 3:4 que es el estándar de las carátulas.
 class _RecentGamesGrid extends StatelessWidget {
   const _RecentGamesGrid({required this.games});
   final List<ApiGame> games;
@@ -336,14 +316,13 @@ class _RecentGamesGrid extends StatelessWidget {
   }
 }
 
+// La tarjeta para los juegos recientes. Si la tocas, vas al detalle del juego.
 class _ApiGameCard extends StatelessWidget {
   const _ApiGameCard({required this.game});
   final ApiGame game;
 
   @override
   Widget build(BuildContext context) {
-    // Usar la misma función que la biblioteca para mantener la coherencia
-    // en plataformas, horas jugadas reales, etc.
     final gm.Game localGame = LibraryScreenState.apiGameToLocal(game);
 
     return GestureDetector(
@@ -356,7 +335,9 @@ class _ApiGameCard extends StatelessWidget {
             ),
           ),
         ).then((_) {
-          context.findAncestorStateOfType<DashboardScreenState>()?.reloadDashboard();
+          if (context.mounted) {
+            context.findAncestorStateOfType<DashboardScreenState>()?.reloadDashboard();
+          }
         });
       },
       child: ClipRRect(
@@ -369,7 +350,7 @@ class _ApiGameCard extends StatelessWidget {
               Image.network(
                 game.coverUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => Container(
+                errorBuilder: (context, error, stackTrace) => Container(
                   color: _kBgCard,
                   child: const Icon(Icons.sports_esports_rounded, color: _kBorder, size: 40),
                 ),
@@ -381,6 +362,7 @@ class _ApiGameCard extends StatelessWidget {
                   );
                 },
               ),
+              // Ponemos un degradado abajo para que los textos blancos se lean bien sobre la imagen.
               Positioned(
                 bottom: 0, left: 0, right: 0,
                 child: Container(
@@ -425,6 +407,7 @@ class _ApiGameCard extends StatelessWidget {
   }
 }
 
+// La etiqueta de colores (Jugando, Completado...) para saber en qué punto estamos con cada juego.
 class _StatusBadge extends StatelessWidget {
   const _StatusBadge({required this.status});
   final String status;
@@ -454,7 +437,7 @@ class _StatusBadge extends StatelessWidget {
   }
 }
 
-// Widget: biblioteca vacia (usuario nuevo)
+// Mensaje para cuando el usuario todavía no ha añadido ningún juego.
 class _EmptyLibraryHint extends StatelessWidget {
   const _EmptyLibraryHint();
   @override
@@ -480,7 +463,7 @@ class _EmptyLibraryHint extends StatelessWidget {
   }
 }
 
-// Widget: estado de error con botono de reintentar
+// Estado de error con botón de reintentar por si falla la conexión.
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.error, required this.onRetry});
   final String error;
@@ -512,10 +495,7 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ACTIVE USERS LIST — Solo usuarios online, navegan al Chat
-// ─────────────────────────────────────────────────────────────────────────────
-
+// Una lista rápida de los amigos que están conectados ahora mismo para poder chatear con ellos.
 class _ActiveUsersList extends StatelessWidget {
   const _ActiveUsersList({required this.users});
   final List<User> users;
@@ -531,13 +511,13 @@ class _ActiveUsersList extends StatelessWidget {
   }
 }
 
+// Cada una de las tarjetas de amigos en el dashboard.
 class _UserCard extends StatelessWidget {
   const _UserCard({required this.user});
   final User user;
 
   @override
   Widget build(BuildContext context) {
-    // Indicador online: siempre verde ya que filtramos solo online
     const kOnlineGreen = Color(0xFF39FF7E);
 
     return GestureDetector(
@@ -553,7 +533,6 @@ class _UserCard extends StatelessWidget {
         ),
         child: Row(
           children: [
-            // Avatar con dot online
             Stack(
               clipBehavior: Clip.none,
               children: [
@@ -576,7 +555,7 @@ class _UserCard extends StatelessWidget {
                         )
                       : _InitialsAvatar(initials: user.initials),
                 ),
-                // Dot online verde
+                // El punto verde que indica que está conectado.
                 Positioned(
                   bottom: -2,
                   right: -2,
@@ -599,7 +578,6 @@ class _UserCard extends StatelessWidget {
               ],
             ),
             const SizedBox(width: 12),
-            // Info
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -624,7 +602,6 @@ class _UserCard extends StatelessWidget {
                 ],
               ),
             ),
-            // Flecha de chat
             const Icon(Icons.chevron_right_rounded, size: 16, color: _kSub),
           ],
         ),

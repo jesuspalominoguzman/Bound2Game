@@ -1,7 +1,9 @@
 const mongoose = require('mongoose');
 const User = require('../models/User');
+const UserLibrary = require('../models/UserLibrary');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const userService = require('../services/userService');
 
 // El secreto para firmar los tokens. Debe estar en .env idealmente.
 const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_key_for_bound2game_tfg';
@@ -93,7 +95,7 @@ const loginUser = async (req, res) => {
                 email: user.email,
                 avatarUrl: user.avatarUrl,
                 reputation: user.reputation,
-                hardwareSpecs: user.hardwareSpecs
+                pcComponents: user.pcComponents
             }
         });
     } catch (error) {
@@ -208,7 +210,6 @@ const updatePlatforms = async (req, res) => {
 const getUserFriends = async (req, res) => {
     try {
         const userId = req.user.id;
-        const UserLibrary = require('../models/UserLibrary');
 
         // 1. Traer el usuario con sus amigos populados (datos básicos)
         const user = await User.findById(userId)
@@ -304,95 +305,25 @@ const searchUsers = async (req, res) => {
  */
 const manageFriendRequest = async (req, res) => {
     try {
-        const senderId     = req.user.id;
+        const senderId = req.user.id;
         const { targetId } = req.body;
-
-        // ── Validación temprana ────────────────────────────────────────────────
-        if (!targetId || typeof targetId !== 'string' || targetId.trim() === '') {
-            return res.status(400).json({ error: 'Debes proporcionar targetId' });
-        }
-        if (!mongoose.Types.ObjectId.isValid(targetId)) {
-            return res.status(400).json({ error: 'El targetId no es un ObjectId válido' });
-        }
-        if (senderId === targetId) {
-            return res.status(400).json({ error: 'No puedes enviarte una solicitud a ti mismo' });
-        }
-
-        const [sender, receiver] = await Promise.all([
-            User.findById(senderId),
-            User.findById(targetId)
-        ]);
-
-        if (!sender || !receiver) {
-            return res.status(404).json({ error: 'Usuario no encontrado' });
-        }
-
-        // ── ¿Ya son amigos? ─────────────────────────────────────────────────
-        const alreadyFriends = sender.friends.map(id => id.toString()).includes(targetId);
-        if (alreadyFriends) {
-            return res.status(409).json({ error: 'Ya sois amigos', status: 'friends' });
-        }
-
-        // ── ¿El TARGET está en los pendingRequests del EMISOR? → ACEPTAR ────
-        // Esto significa: el target nos envió una solicitud y ahora la aceptamos.
-        // Ejemplo: A envió a B (B.pending=[A]). B acepta: sender=B,target=A.
-        // Check: ¿está A en B.pendingRequests? Sí → aceptar.
-        const hasPendingFromTarget = sender.pendingRequests
-            .map(id => id.toString()).includes(targetId);
-
-        if (hasPendingFromTarget) {
-            // Mover a friends[], limpiar pendingRequests del emisor (que estaba esperando)
-            sender.friends.push(targetId);
-            receiver.friends.push(senderId);
-            sender.pendingRequests = sender.pendingRequests.filter(
-                id => id.toString() !== targetId
-            );
-            await Promise.all([sender.save(), receiver.save()]);
-
-            // Emitir evento de socket si el receptor está conectado
-            const io = req.app.get('io');
-            if (io) {
-                io.of('/chat').to(`user_${targetId}`).emit('friendRequest', {
-                    username: sender.username,
-                    userId: senderId,
-                    type: 'accepted'
-                });
-            }
-
-            return res.status(200).json({
-                message: '¡Solicitud aceptada! Ahora sois amigos.',
-                status: 'accepted'
-            });
-        }
-
-        // ── ¿El emisor ya envió una solicitud antes? (está en pending del receptor) ─
-        const alreadySent = receiver.pendingRequests
-            .map(id => id.toString()).includes(senderId);
-        if (alreadySent) {
-            return res.status(409).json({ error: 'Solicitud ya enviada', status: 'pending' });
-        }
-
-        // ── ENVIAR: añadir senderId a los pendingRequests del receiver ────────
-        receiver.pendingRequests.push(senderId);
-        await receiver.save();
-
-        // Emitir evento de socket si el receptor está conectado
         const io = req.app.get('io');
-        if (io) {
-            io.of('/chat').to(`user_${targetId}`).emit('friendRequest', {
-                username: sender.username,
-                userId: senderId,
-                type: 'request'
-            });
+
+        if (!targetId || !mongoose.Types.ObjectId.isValid(targetId)) {
+            return res.status(400).json({ error: 'targetId no válido' });
         }
 
-        return res.status(200).json({
-            message: 'Solicitud de amistad enviada correctamente.',
-            status: 'pending'
+        const result = await userService.manageFriendRequest(senderId, targetId, io);
+        return res.status(result.status).json({
+            message: result.message,
+            status: result.code
         });
     } catch (error) {
+        if (error.status) {
+            return res.status(error.status).json({ error: error.message });
+        }
         console.error('Error en manageFriendRequest:', error);
-        return res.status(500).json({ error: 'Error interno al gestionar la solicitud de amistad' });
+        return res.status(500).json({ error: 'Error interno al gestionar la solicitud' });
     }
 };
 
@@ -416,8 +347,6 @@ const getFriendLibrary = async (req, res) => {
             return res.status(403).json({ error: 'Solo puedes ver la biblioteca de tus amigos' });
         }
 
-        // Importar UserLibrary aquí para no crear dependencia circular en el módulo
-        const UserLibrary = require('../models/UserLibrary');
         const entries = await UserLibrary.find({ userId })
             .populate('gameId', 'title imageUrl steamAppID hltb')
             .sort({ addedAt: -1 });
@@ -444,8 +373,6 @@ const getUserLibraryPreview = async (req, res) => {
         if (!mongoose.Types.ObjectId.isValid(userId)) {
             return res.status(400).json({ error: 'userId no válido' });
         }
-
-        const UserLibrary = require('../models/UserLibrary');
         const entries = await UserLibrary.find({ userId })
             .populate('gameId', 'title imageUrl steamAppID hltb')
             .sort({ addedAt: -1 })

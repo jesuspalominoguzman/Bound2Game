@@ -1,84 +1,61 @@
-// =============================================================================
-// socket_service.dart — Bound2Game Flutter
-//
-// Servicio Singleton para gestionar la conexión WebSocket con el backend.
-// Utiliza el paquete `socket_io_client` apuntando al namespace `/chat`.
-//
-// Dependencia requerida en pubspec.yaml:
-//   socket_io_client: ^2.0.3+1
-//
-// IP Docker Android Emulator: 10.0.2.2 (equivale a 127.0.0.1 del host)
-// =============================================================================
+// Este archivo es el que hace que el chat funcione en tiempo real.
+// Usamos WebSockets para que los mensajes lleguen al instante, como en WhatsApp, sin tener que estar refrescando la pantalla cada dos por tres.
 
-import 'package:socket_io_client/socket_io_client.dart' as IO;
+import 'package:flutter/foundation.dart';
+import 'package:socket_io_client/socket_io_client.dart' as socket_io;
 import 'api_service.dart';
 
 class SocketService {
-  // ── Singleton ───────────────────────────────────────────────────────────────
+  // Lo hacemos Singleton para que solo haya una conexión abierta en toda la app y no volvamos loco al servidor.
   SocketService._internal();
   static final SocketService _instance = SocketService._internal();
   factory SocketService() => _instance;
 
-  // ── Estado interno ──────────────────────────────────────────────────────────
-  IO.Socket? _socket;
+  socket_io.Socket? _socket;
 
-  /// Devuelve `true` si el socket existe y está conectado al servidor.
+  // Una forma rápida de saber si estamos conectados o si la conexión se ha caído.
   bool get isConnected => _socket?.connected ?? false;
 
-  // ── Conexión ────────────────────────────────────────────────────────────────
-
-  /// Conecta al namespace `/chat` y une al usuario a la [roomId] indicada.
-  ///
-  /// Llama a este método al abrir [ChatScreen]. Si ya hay una conexión activa
-  /// reutiliza el socket y solo emite `joinRoom`.
+  // Nos conectamos a la "sala" de chat. Si ya estábamos conectados, simplemente nos unimos a la sala que toca.
   void connect(String roomId) {
-    // Reutilizar socket si ya está conectado (Singleton garantiza unicidad)
     if (_socket != null && _socket!.connected) {
       _joinRoom(roomId);
       return;
     }
 
-    _socket = IO.io(
-      '${ApiService.baseUrl}/chat', // Namespace /chat del backend dinámico
-      IO.OptionBuilder()
-          .setTransports(['websocket'])       // Fuerza WebSocket puro (sin polling)
-          .disableAutoConnect()               // Controlamos la conexión manualmente
-          .setReconnectionAttempts(5)         // Reintentos ante caída de red
-          .setReconnectionDelay(2000)         // 2s entre reintentos
+    _socket = socket_io.io(
+      '${ApiService.baseUrl}/chat', 
+      socket_io.OptionBuilder()
+          .setTransports(['websocket'])       // Usamos solo websockets, que es más rápido.
+          .disableAutoConnect()               
+          .setReconnectionAttempts(5)         
+          .setReconnectionDelay(2000)         
           .build(),
     );
 
-    // ── Listeners de ciclo de vida ──────────────────────────────────────────
+    // Controlamos los eventos de la conexión para saber qué está pasando.
     _socket!.onConnect((_) {
-      print('🟢 [SocketService] Conectado al namespace /chat');
+      debugPrint('🟢 Conectado al chat');
       _joinRoom(roomId);
     });
 
     _socket!.onDisconnect((_) {
-      print('🔴 [SocketService] Desconectado del servidor');
+      debugPrint('🔴 Desconectado del chat');
     });
 
     _socket!.onConnectError((err) {
-      print('🔴 [SocketService] Error de conexión: $err');
+      debugPrint('🔴 Error al intentar conectar: $err');
     });
 
     _socket!.connect();
   }
 
-  /// Envía el evento `joinRoom` al servidor para suscribirse a la sala.
+  // Le decimos al servidor en qué sala queremos estar para recibir solo los mensajes de esa conversación.
   void _joinRoom(String roomId) {
     _socket?.emit('joinRoom', {'roomId': roomId});
-    print('📥 [SocketService] joinRoom → $roomId');
   }
 
-  // ── Envío de mensajes ───────────────────────────────────────────────────────
-
-  /// Emite un mensaje al servidor bajo el evento `sendMessage`.
-  ///
-  /// - [roomId]   : ID único de la sala (ej. "userId1_userId2" ordenado).
-  /// - [userId]   : MongoDB ObjectId del usuario autenticado.
-  /// - [content]  : Texto del mensaje o URL del GIF de Giphy.
-  /// - [type]     : `'text'` o `'gif'`.
+  // Mandamos un mensaje (texto o GIF) al servidor para que se lo pase al otro usuario.
   void sendMessage({
     required String roomId,
     required String userId,
@@ -86,7 +63,7 @@ class SocketService {
     required String type,
   }) {
     if (!isConnected) {
-      print('⚠️ [SocketService] sendMessage ignorado: socket no conectado');
+      debugPrint('⚠️ No se puede mandar el mensaje porque no hay conexión');
       return;
     }
 
@@ -98,39 +75,26 @@ class SocketService {
     });
   }
 
-  // ── Escucha de eventos ──────────────────────────────────────────────────────
-
-  /// Registra un callback para recibir nuevos mensajes en tiempo real.
-  ///
-  /// Úsalo en `initState` de [ChatScreen]:
-  /// ```dart
-  /// SocketService().onNewMessage((data) {
-  ///   setState(() => _messages.insert(0, _fromJson(data)));
-  /// });
-  /// ```
+  // Aquí es donde nos quedamos escuchando por si llega un mensaje nuevo para pintarlo en la pantalla.
   void onNewMessage(void Function(dynamic data) callback) {
     _socket?.on('newMessage', callback);
   }
 
-  /// Registra un callback para recibir el historial inicial de mensajes.
+  // Para cargar los mensajes antiguos cuando entramos en el chat.
   void onChatHistory(void Function(dynamic data) callback) {
     _socket?.on('chatHistory', callback);
   }
 
-  /// Registra un callback para errores emitidos por el servidor.
+  // Por si el servidor nos manda algún error relacionado con el chat.
   void onError(void Function(dynamic data) callback) {
     _socket?.on('chatError', callback);
   }
 
-  // ── Desconexión ─────────────────────────────────────────────────────────────
-
-  /// Desconecta el socket y libera recursos.
-  ///
-  /// Llama a este método en `dispose()` de [ChatScreen].
+  // Al salir del chat, cerramos la conexión para no gastar batería ni datos innecesariamente.
   void disconnect() {
     _socket?.disconnect();
     _socket?.dispose();
     _socket = null;
-    print('🔌 [SocketService] Socket desconectado y liberado');
+    debugPrint('🔌 Conexión de socket cerrada');
   }
 }

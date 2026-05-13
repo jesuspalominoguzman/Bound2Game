@@ -96,7 +96,7 @@ class _ShakeSelectorScreenState extends State<ShakeSelectorScreen>
         });
       }
     } catch (e) {
-      print("Error loading library for Shake to Play: $e");
+      debugPrint("Error loading library for Shake to Play: $e");
       if (mounted) {
         setState(() => _isLoadingLibrary = false);
       }

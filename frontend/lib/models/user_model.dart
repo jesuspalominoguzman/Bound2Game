@@ -1,13 +1,9 @@
-// =============================================================================
-// user_model.dart — Bound2Game Flutter
-// =============================================================================
+// Este archivo es el modelo de los usuarios de la app. He intentado que guarde todo lo importante: su karma, sus amigos, qué PC tienen y hasta sus cuentas vinculadas.
+// Al final, es lo que usamos para pintar los perfiles y saber quién está conectado.
 
 import 'package:flutter/material.dart';
 
-// =============================================================================
-// MODELO PRINCIPAL (Real de MongoDB)
-// =============================================================================
-
+// Esta es la clase principal para cualquier usuario (nosotros o nuestros amigos). Me traigo los datos directamente de MongoDB.
 class User {
   final String id;
   final String username;
@@ -17,9 +13,8 @@ class User {
   final int karma;
   final Map<String, dynamic> pcComponents;
   final List<User> friends;
-  /// Títulos recientes de la biblioteca del amigo (max 5).
+  // Los últimos juegos a los que ha dado caña para enseñarlos en su perfil.
   final List<String> recentGames;
-  /// URLs de portada de los juegos recientes (misma longitud que recentGames).
   final List<String> recentGameCovers;
   final bool isOnline;
   final String? steamId;
@@ -27,7 +22,7 @@ class User {
   final String? xboxId;
   final String? discordId;
   final int friendsCount;
-  final String? userRating; // 'like', 'dislike', or 'none'
+  final String? userRating; // Si nos cae bien (like), mal (dislike) o ni fu ni fa.
 
   const User({
     required this.id,
@@ -87,16 +82,14 @@ class User {
     );
   }
 
-  // ── Computed ────────────────────────────────────────────────────────────────
-
-  /// Iniciales para avatar generado. Ej: 'VR'
+  // Si el usuario no tiene foto, sacamos las iniciales de su nombre para ponerlas en el círculo del avatar y que no quede vacío.
   String get initials {
     if (username.isEmpty) return '?';
     if (username.length == 1) return username.toUpperCase();
     return username.substring(0, 2).toUpperCase();
   }
 
-  /// Color de fondo del avatar generado basado en el ID
+  // Generamos un color aleatorio (pero siempre el mismo para el mismo usuario) para el fondo del avatar.
   Color get avatarBgColor {
     if (id.isEmpty) return const Color(0xFF1A1A1A);
     final colors = [
@@ -110,8 +103,8 @@ class User {
     final hash = id.hashCode.abs();
     return colors[hash % colors.length];
   }
-  /// Crea una copia del usuario con los campos especificados actualizados.
-  /// Útil para actualizaciones inmutables de estado (ej: isOnline en tiempo real).
+
+  // Esto nos sirve para actualizar solo un trocito del usuario (como si está online o no) sin tener que volver a crear todo el objeto.
   User copyWith({
     bool? isOnline,
     String? steamId,

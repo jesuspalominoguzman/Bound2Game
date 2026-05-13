@@ -472,7 +472,7 @@ class _GameListTile extends StatelessWidget {
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: ClipRRect(
         borderRadius: BorderRadius.circular(6),
-        child: Image.network(game.imageUrl, width: 40, height: 40, fit: BoxFit.cover, errorBuilder: (_,__,___) => Container(width: 40, height: 40, color: _bgCard2)),
+        child: Image.network(game.imageUrl, width: 40, height: 40, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(width: 40, height: 40, color: _bgCard2)),
       ),
       title: Text(game.title, style: const TextStyle(color: _textMain, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: game.userPlaytime != null && game.userPlaytime! > 0

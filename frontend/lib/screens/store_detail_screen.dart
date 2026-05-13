@@ -6,7 +6,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/deal_model.dart';
-import '../models/game_model.dart';
 import '../widgets/advanced_filters_modal.dart';
 import '../widgets/store_logo.dart';
 import '../services/api_service.dart';

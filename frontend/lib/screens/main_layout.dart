@@ -1,11 +1,5 @@
-// =============================================================================
-// main_layout.dart — Bound2Game Flutter (Android)
-//
-// Layout principal refactorizado con identidad visual definitiva:
-//   - Paleta: fondo #292929, tarjetas/bar #1A1A1A, acento #FFB800.
-//   - AppBar: título dinámico animado (DynamicAppBarTitle), lupa amarilla.
-//   - BottomBar: indicador y íconos activos en amarillo #FFB800.
-// =============================================================================
+// Aquí es donde empieza la magia. Este archivo controla la estructura base de la app, con su barrita de navegación y todo eso.
+// Le he metido un diseño oscuro que mola bastante y los iconos en amarillo para que resalten.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -21,17 +15,14 @@ import '../widgets/dynamic_appbar_title.dart';
 import '../services/auth_service.dart';
 import '../services/presence_service.dart';
 
-// ── Paleta definitiva ─────────────────────────────────────────────────────────
-const _kBgPage   = Color(0xFF292929); // Fondo de la página
-const _kBgBar    = Color(0xFF1A1A1A); // AppBar y BottomBar
-const _kBorder   = Color(0xFF2A2A2A); // Bordes sutiles
-const _kYellow   = Color(0xFFFFB800); // Acento principal
-const _kMuted    = Color(0xFF777777); // Ítems inactivos
+// Mis colores para que todo quede bien conjuntado y con un aire moderno.
+const _kBgPage   = Color(0xFF292929); 
+const _kBgBar    = Color(0xFF1A1A1A); 
+const _kBorder   = Color(0xFF2A2A2A); 
+const _kYellow   = Color(0xFFFFB800); 
+const _kMuted    = Color(0xFF777777); 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MODELO DE ÍTEM DE NAVEGACIÓN
-// ─────────────────────────────────────────────────────────────────────────────
-
+// Un pequeño objeto para no liarme con los iconos y las pantallas de la navegación.
 class _NavItem {
   const _NavItem({
     required this.label,
@@ -46,14 +37,12 @@ class _NavItem {
   final Widget screen;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// DATOS DE NAVEGACIÓN
-// ─────────────────────────────────────────────────────────────────────────────
-
+// Aquí guardo las referencias a las pantallas para poder manejarlas mejor.
 final GlobalKey<LibraryScreenState> libraryKey = GlobalKey<LibraryScreenState>();
 final GlobalKey<DashboardScreenState> dashboardKey = GlobalKey<DashboardScreenState>();
 final GlobalKey<ProfileScreenState> profileKey = GlobalKey<ProfileScreenState>();
 
+// Aquí defino qué pantallas van en el menú de abajo. Por ahora tenemos Inicio, Biblioteca, Ofertas, Social y Perfil.
 List<_NavItem> _buildNavItems(ValueChanged<int> onNavigate) => [
   _NavItem(
     label: 'Inicio',
@@ -87,10 +76,6 @@ List<_NavItem> _buildNavItems(ValueChanged<int> onNavigate) => [
   ),
 ];
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN LAYOUT
-// ─────────────────────────────────────────────────────────────────────────────
-
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
 
@@ -109,19 +94,18 @@ class _MainLayoutState extends State<MainLayout>
     super.initState();
     _navItems = _buildNavItems(_onTabSelected);
 
-    // Barra de sistema transparente para integración con el fondo oscuro
+    // Al arrancar, ponemos la barra de arriba transparente para que quede profesional y conectamos el tema de la presencia online.
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.light,
     ));
 
-    // Registrar observer del ciclo de vida y conectar presencia
+    // Esto es para saber si la app se queda en segundo plano o si el usuario vuelve.
     WidgetsBinding.instance.addObserver(this);
     _initPresence();
   }
 
-
-
+  // Conectamos con el servidor para que sepa que estamos aquí.
   Future<void> _initPresence() async {
     final session = await AuthService.loadSession();
     if (session != null) {
@@ -134,13 +118,13 @@ class _MainLayoutState extends State<MainLayout>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     switch (state) {
       case AppLifecycleState.resumed:
-        // App vuelve a primer plano → reconectar y notificar presencia
+        // El usuario vuelve a abrir la app, le ponemos en línea.
         PresenceService.instance.connect();
         break;
       case AppLifecycleState.paused:
       case AppLifecycleState.detached:
       case AppLifecycleState.hidden:
-        // App va a segundo plano / se cierra → desconectar
+        // El usuario se pira o cierra la app, le desconectamos.
         PresenceService.instance.disconnect();
         break;
       case AppLifecycleState.inactive:
@@ -148,10 +132,10 @@ class _MainLayoutState extends State<MainLayout>
     }
   }
 
+  // Lo que pasa cuando tocas un botón de abajo: cambiamos de pantalla y refrescamos si hace falta.
   void _onTabSelected(int index) {
-    // Si ya estamos en el mismo tab, igualmente recargamos el contenido
     if (index == _selectedIndex) {
-      // Refrescar el tab activo al re-pulsar
+      // Si ya estamos en la pantalla, que se recargue por si hay datos nuevos.
       if (index == 0) {
         dashboardKey.currentState?.reloadDashboard();
       }
@@ -163,7 +147,6 @@ class _MainLayoutState extends State<MainLayout>
 
     setState(() => _selectedIndex = index);
 
-    // Recargar al cambiar de pestaña
     if (index == 0) {
       dashboardKey.currentState?.reloadDashboard();
     } else if (index == 1) {
@@ -180,6 +163,7 @@ class _MainLayoutState extends State<MainLayout>
 
   String get _currentPageName => _navItems[_selectedIndex].label;
 
+  // La barra de arriba. Le he puesto la lupa para buscar y los ajustes, todo bien ordenado.
   PreferredSizeWidget _buildAppBar() {
     return AppBar(
       backgroundColor: _kBgBar,
@@ -188,15 +172,13 @@ class _MainLayoutState extends State<MainLayout>
       shadowColor: Colors.black.withValues(alpha: 0.6),
       elevation: 0,
       toolbarHeight: 60,
-      // Título dinámico animado — alineado a la izquierda (centerTitle: false por defecto)
       title: DynamicAppBarTitle(pageName: _currentPageName),
       actions: [
-        // Lupa en amarillo #FFB800
         IconButton(
           icon: const Icon(Icons.search_rounded, color: _kYellow, size: 24),
           onPressed: () async {
             await showSearch(context: context, delegate: B2GSearchDelegate());
-            // Si estábamos en la pestaña Biblioteca o Inicio, recargamos por si añadió/quitó juegos
+            // Si vuelve de buscar, que se refresquen las pantallas por si ha cambiado algo.
             if (_selectedIndex == 1) {
               libraryKey.currentState?.reloadLibrary();
             } else if (_selectedIndex == 0) {
@@ -204,14 +186,13 @@ class _MainLayoutState extends State<MainLayout>
             }
           },
         ),
-        // Botón de ajustes en amarillo #FFB800
         IconButton(
           icon: const Icon(Icons.settings_rounded, color: _kYellow, size: 24),
           onPressed: () async {
             await Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SettingsScreen()),
             );
-            // Si estábamos en la pestaña Perfil, recargamos
+            // Si vuelve de ajustes y está en su perfil, que se actualice.
             if (_selectedIndex == 4) {
               profileKey.currentState?.refresh();
             }
@@ -244,10 +225,7 @@ class _MainLayoutState extends State<MainLayout>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: _AnimatedPageSwitcher
-// ─────────────────────────────────────────────────────────────────────────────
-
+// Un pequeño efecto para que el cambio de pantalla no sea un corte seco, que quede fluido.
 class _AnimatedPageSwitcher extends StatefulWidget {
   const _AnimatedPageSwitcher({
     required this.currentIndex,
@@ -319,10 +297,7 @@ class _AnimatedPageSwitcherState extends State<_AnimatedPageSwitcher>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: _B2GBottomBar
-// ─────────────────────────────────────────────────────────────────────────────
-
+// La barra de navegación de abajo personalizada. He intentado que se vea premium.
 class _B2GBottomBar extends StatelessWidget {
   const _B2GBottomBar({
     required this.selectedIndex,
@@ -372,10 +347,7 @@ class _B2GBottomBar extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// WIDGET: _NavBarItem
-// ─────────────────────────────────────────────────────────────────────────────
-
+// Cada uno de los botones de la barra. Tienen una rayita amarilla arriba cuando están activos.
 class _NavBarItem extends StatelessWidget {
   const _NavBarItem({
     required this.label,
@@ -403,7 +375,7 @@ class _NavBarItem extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Indicador activo — línea superior amarilla
+            // El indicador amarillo de arriba para que sepas dónde estás.
             AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeOut,

@@ -1,25 +1,13 @@
-// =============================================================================
-// presence_service.dart — Bound2Game Flutter
-//
-// Servicio singleton que gestiona el estado de presencia del usuario en tiempo
-// real a través del namespace /chat de Socket.io.
-//
-// Flujo:
-//   • App pasa a resumed  → connect() + emit('userConnected', { userId })
-//   • App pasa a paused/detached → emit('userDisconnected') + disconnect()
-//
-// El servidor actualiza User.isOnline en MongoDB al recibir cada evento y
-// también lo pone a false automáticamente en el evento 'disconnect' del socket.
-// =============================================================================
+// Este servicio se encarga de decir al servidor si estamos conectados o no. 
+// Así nuestros amigos pueden ver el punto verde en su lista y saber que podemos chatear o echar una partida.
 
 import 'dart:async';
-import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart';
 import 'package:socket_io_client/socket_io_client.dart' as sio;
 import 'api_service.dart';
 
 class PresenceService {
-  // ── Singleton ────────────────────────────────────────────────────────────
+  // Lo hacemos Singleton para que solo haya una instancia controlando nuestra presencia.
   PresenceService._();
   static final PresenceService instance = PresenceService._();
 
@@ -27,16 +15,16 @@ class PresenceService {
   String? _userId;
   bool _isConnected = false;
 
-  // Stream para emitir los eventos de presencia a la UI
+  // Este es el chorro de datos que manda las actualizaciones de quién se conecta y quién se desconecta a toda la app.
   final _presenceController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get presenceUpdates => _presenceController.stream;
 
-  // ── Inicializar con el ID del usuario autenticado ────────────────────────
+  // Guardamos el ID del usuario cuando hace login.
   void init(String userId) {
     _userId = userId;
   }
 
-  // ── Conectar al socket y notificar presencia ──────────────────────────────
+  // Nos conectamos al servidor y le gritamos: "¡Eh, que ya estoy aquí!" mandándole nuestro ID.
   void connect() {
     if (_userId == null || _isConnected) return;
 
@@ -50,47 +38,43 @@ class PresenceService {
 
     _socket!.onConnect((_) {
       _isConnected = true;
-      debugPrint('🟢 [PresenceService] Socket conectado');
+      debugPrint('🟢 Presence: Ya estamos en línea');
       _socket!.emit('userConnected', {'userId': _userId});
     });
 
-    // Redirigir evento de presencia al Stream global
+    // Escuchamos cuando alguien cambia su estado para avisar a la pantalla social y que se actualicen los puntos verdes.
     _socket!.on('presenceUpdate', (data) {
       if (data != null && data is Map<String, dynamic>) {
         _presenceController.add(data);
       } else if (data != null) {
-        // En caso de que venga como un map dinámico genérico
         _presenceController.add(Map<String, dynamic>.from(data));
       }
     });
 
     _socket!.onDisconnect((_) {
       _isConnected = false;
-      debugPrint('🔴 [PresenceService] Socket desconectado');
+      debugPrint('🔴 Presence: Nos hemos desconectado');
     });
 
     _socket!.onError((err) {
-      debugPrint('🔴 [PresenceService] Error: $err');
+      debugPrint('🔴 Presence Error: $err');
     });
-
-
 
     _socket!.connect();
   }
 
-  // ── Desconectar (app va a segundo plano / se cierra) ─────────────────────
+  // Cuando cerramos la app o la dejamos en segundo plano, le decimos al servidor que nos vamos.
   void disconnect() {
     if (_socket != null && _isConnected) {
-      // El servidor detectará el disconnect y pondrá isOnline = false
       _socket!.disconnect();
       _socket!.dispose();
       _socket = null;
       _isConnected = false;
-      debugPrint('🔴 [PresenceService] Desconectado manualmente');
+      debugPrint('🔴 Presence: Desconexión manual');
     }
   }
 
-  // ── Limpiar (logout) ─────────────────────────────────────────────────────
+  // Para cuando el usuario cierra sesión, que no se quede su ID por ahí guardado.
   void clear() {
     disconnect();
     _userId = null;

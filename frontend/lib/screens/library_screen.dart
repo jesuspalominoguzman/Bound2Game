@@ -1,14 +1,5 @@
-// =============================================================================
-// library_screen.dart — Bound2Game Flutter (Android)
-// Fuente: InterfazdeusuarioBound2game - CORRECTO
-//   └── src/app/pages/Library.tsx
-//
-// Refactorización v2 — Tema visual definitivo #292929/#1A1A1A/#FFB800:
-//   • Eliminado título estático (lo muestra DynamicAppBar).
-//   • Barra de búsqueda Expanded + contador de juegos en Row responsive.
-//   • Filtros avanzados multi-categoría vía AdvancedFiltersModal.
-//   • Paleta unificada con el resto de la app.
-// =============================================================================
+// Esta es la pantalla de la Biblioteca. Aquí es donde guardamos todos nuestros juegos y podemos filtrarlos para decidir a qué jugar hoy.
+// He intentado que sea muy visual y que encontrar un juego sea súper fácil, incluso si tienes cientos.
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -21,7 +12,7 @@ import 'game_detail_screen.dart';
 import 'main_layout.dart' show dashboardKey;
 import 'shake_selector_screen.dart';
 
-// ── Paleta del tema definitivo ─────────────────────────────────────────────────
+// Mis colores para que todo pegue con el resto de la app.
 const _kBg      = Color(0xFF292929);
 const _kBgCard  = Color(0xFF1A1A1A);
 const _kBorder  = Color(0xFF2A2A2A);
@@ -29,10 +20,6 @@ const _kYellow  = Color(0xFFFFB800);
 const _kWhite   = Color(0xFFFFFFFF);
 const _kMuted   = Color(0xFF888888);
 const _kSub     = Color(0xFF555555);
-
-// =============================================================================
-// LIBRARY SCREEN
-// =============================================================================
 
 class LibraryScreen extends StatefulWidget {
   const LibraryScreen({super.key});
@@ -44,20 +31,18 @@ class LibraryScreen extends StatefulWidget {
 class LibraryScreenState extends State<LibraryScreen>
     with SingleTickerProviderStateMixin {
 
-  // ── Datos reales del backend ─────────────────────────────────────────────────
   List<Game> _allGames = [];
   bool _isLoading = true;
   String? _loadError;
 
-  // ── Estado de búsqueda ────────────────────────────────────────────────────
   final TextEditingController _searchCtrl  = TextEditingController();
   final FocusNode             _searchFocus = FocusNode();
   bool   _isSearchFocused = false;
   String _searchQuery     = '';
 
-  // ── Filtros avanzados ─────────────────────────────────────────────────────
   LibraryFilters _filters = const LibraryFilters();
 
+  // Estas son las etiquetas de los filtros que tenemos activos. Si pulsas en una, se quita el filtro al momento.
   List<_FilterTag> get _activeFilterTags {
     final tags = <_FilterTag>[];
     if (_filters.platformEnabled) {
@@ -103,7 +88,7 @@ class LibraryScreenState extends State<LibraryScreen>
     return tags;
   }
 
-  // ── Géneros disponibles (derivado de los datos reales) ──────────────────────
+  // Pillamos todos los géneros que tenemos en la biblioteca para poder filtrar por ellos.
   List<String> get _availableGenres => _allGames
       .map((g) => g.genre)
       .where((g) => g.isNotEmpty && g != 'Varios' && g != 'Sin género')
@@ -111,12 +96,10 @@ class LibraryScreenState extends State<LibraryScreen>
       .toList()
     ..sort();
 
-  // ── Juegos filtrados (computed) ────────────────────────────────────────────
+  // Aquí aplicamos tanto los filtros avanzados como lo que hayamos escrito en el buscador.
   List<Game> get _filteredGames {
-    // 1. Aplicamos filtros avanzados (Plataforma, Género, Estado, etc.)
     var result = _filters.apply(_allGames);
 
-    // 2. Filtro secundario por texto de búsqueda
     if (_searchQuery.isNotEmpty) {
       result = result.where((game) {
         return game.title.toLowerCase().contains(_searchQuery);
@@ -136,9 +119,11 @@ class LibraryScreenState extends State<LibraryScreen>
     _searchFocus.addListener(
       () => setState(() => _isSearchFocused = _searchFocus.hasFocus),
     );
+    // Al entrar, pedimos los juegos al servidor.
     reloadLibrary();
   }
 
+  // Pedimos al servidor nuestra lista de juegos actualizada.
   Future<void> reloadLibrary() async {
     setState(() { _isLoading = true; _loadError = null; });
     try {
@@ -155,12 +140,12 @@ class LibraryScreenState extends State<LibraryScreen>
     }
   }
 
+  // Este método es un poco lío pero muy importante. Convierte el juego del servidor a nuestro formato local.
   static Game apiGameToLocal(ApiGame api) {
     Platform platform;
     String apiPlat = (api.platform ?? '').toLowerCase();
 
-    // 1. Priorizar selección explícita del usuario en el Edit Dialog.
-    // (Ignoramos 'steam' y 'pc' porque suelen ser el valor por defecto erróneo para juegos antiguos).
+    // Intentamos adivinar la plataforma basándonos en lo que nos dice el servidor.
     if (apiPlat == 'epic' || apiPlat == 'epic games') {
       platform = Platform.epic;
     } else if (apiPlat == 'instant gaming' || apiPlat == 'ig') {
@@ -172,7 +157,7 @@ class LibraryScreenState extends State<LibraryScreen>
     } else if (apiPlat == 'nintendo' || apiPlat == 'nintendo switch' || apiPlat == 'switch') {
       platform = Platform.nintendo;
     } else {
-      // 2. Fallback a RAWG si no hay selección manual fuerte
+      // Si no está claro, miramos los datos de RAWG.
       if (api.rawgPlatforms.isNotEmpty) {
         final slugs = api.rawgPlatforms;
         final hasPc        = slugs.any((s) => s == 'pc');
@@ -186,7 +171,6 @@ class LibraryScreenState extends State<LibraryScreen>
           } else if ((api.cheapestStore ?? '').toLowerCase().contains('epic')) {
             platform = Platform.epic;
           } else {
-            // Juegos populares de PC sin SteamID (ej. Valorant, LoL) suelen ser de Epic o cliente propio.
             platform = Platform.epic; 
           }
         } else if (hasNintendo) {
@@ -199,9 +183,8 @@ class LibraryScreenState extends State<LibraryScreen>
           platform = Platform.integrated;
         }
       } else {
-        // 3. Fallback final
         if ((apiPlat == 'steam' || apiPlat == 'pc') && (api.steamAppID == null || api.steamAppID!.isEmpty)) {
-          platform = Platform.epic; // Cambiamos integrated por epic
+          platform = Platform.epic;
         } else {
           platform = Platform.steam;
         }
@@ -223,7 +206,7 @@ class LibraryScreenState extends State<LibraryScreen>
       playtime:     api.userPlaytime ?? 0,
       status:       status,
       cover:        api.imageUrl,
-      pcReq:        PcReq.yellow, // Por defecto en biblioteca
+      pcReq:        PcReq.yellow, 
       hasCosmetics: false,
       price:        double.tryParse(api.currentPrice ?? '0') ?? 0,
       year:         api.releaseYear ?? 0,
@@ -245,6 +228,7 @@ class LibraryScreenState extends State<LibraryScreen>
     super.dispose();
   }
 
+  // Cuando tocas un juego, abrimos su ficha con una animación suave.
   void _openDetail(BuildContext context, Game game) {
     Navigator.of(context).push(
       PageRouteBuilder(
@@ -266,11 +250,11 @@ class LibraryScreenState extends State<LibraryScreen>
       ),
     ).then((_) {
       reloadLibrary();
-      // También actualizamos el Dashboard por si se añadió/quitó un juego
       dashboardKey.currentState?.reloadDashboard();
     });
   }
 
+  // Abrimos el modal con todos los filtros de plataforma, género, etc.
   Future<void> _openFilters() async {
     final result = await showAdvancedFilters(
       context: context,
@@ -284,7 +268,6 @@ class LibraryScreenState extends State<LibraryScreen>
 
   @override
   Widget build(BuildContext context) {
-    // Estado de carga
     if (_isLoading) {
       return const Center(
         child: CircularProgressIndicator(
@@ -292,14 +275,13 @@ class LibraryScreenState extends State<LibraryScreen>
         ),
       );
     }
-    // Estado de error
     if (_loadError != null) {
       return Center(child: Padding(padding: const EdgeInsets.all(32), child: Column(mainAxisSize: MainAxisSize.min, children: [
         const Icon(Icons.wifi_off_rounded, color: Color(0xFF555555), size: 40),
         const SizedBox(height: 16),
-        Text('No se pudo cargar la biblioteca', style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+        const Text('No se pudo cargar la biblioteca', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
         const SizedBox(height: 8),
-        Text(_loadError!, style: GoogleFonts.inter(fontSize: 11, color: const Color(0xFFAAAAAA)), textAlign: TextAlign.center),
+        Text(_loadError!, style: const TextStyle(fontSize: 11, color: Color(0xFFAAAAAA)), textAlign: TextAlign.center),
         const SizedBox(height: 20),
         GestureDetector(
           onTap: reloadLibrary,
@@ -310,7 +292,7 @@ class LibraryScreenState extends State<LibraryScreen>
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: const Color(0xFFFFB800).withValues(alpha: 0.4)),
             ),
-            child: Text('Reintentar', style: GoogleFonts.inter(fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFFFFB800))),
+            child: const Text('Reintentar', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: Color(0xFFFFB800))),
           ),
         ),
       ])));
@@ -322,6 +304,7 @@ class LibraryScreenState extends State<LibraryScreen>
       children: [
         Column(
           children: [
+            // La parte de arriba con el buscador y el contador.
             _LibraryTopBar(
               searchCtrl:       _searchCtrl,
               searchFocus:      _searchFocus,
@@ -342,9 +325,9 @@ class LibraryScreenState extends State<LibraryScreen>
           ],
         ),
 
-        // ── FAB "Shake to Play" ──────────────────────────────────────────
+        // El botón mágico para que la app elija a qué jugar por ti.
         Positioned(
-          bottom: 24, // Bajado para estar cerca del navbar, no en el centro
+          bottom: 24,
           right: 16,
           child: const _ShakeToPlayFab(),
         ),
@@ -352,10 +335,6 @@ class LibraryScreenState extends State<LibraryScreen>
     );
   }
 }
-
-// =============================================================================
-// _LibraryTopBar — Búsqueda responsive + contador + botón de filtros
-// =============================================================================
 
 class _LibraryTopBar extends StatelessWidget {
   const _LibraryTopBar({
@@ -384,10 +363,8 @@ class _LibraryTopBar extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── Row responsive: [SearchBar expandida] [Contador] ──────────────
           Row(
             children: [
-              // Campo de búsqueda — ocupa todo el espacio libre
               Expanded(
                 child: _LibrarySearchBar(
                   controller: searchCtrl,
@@ -397,7 +374,6 @@ class _LibraryTopBar extends StatelessWidget {
               ),
               const SizedBox(width: 8),
 
-              // Contador de juegos (se encoge automáticamente)
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
@@ -420,10 +396,8 @@ class _LibraryTopBar extends StatelessWidget {
           ),
           const SizedBox(height: 10),
 
-          // ── Fila de acción: botón de filtros + tags ───────────────────────
           Row(
             children: [
-              // Botón filtros avanzados
               GestureDetector(
                 onTap: onFilterTap,
                 child: Container(
@@ -465,7 +439,6 @@ class _LibraryTopBar extends StatelessWidget {
               ),
               const SizedBox(width: 10),
 
-              // Lista horizontal de filtros activos
               if (activeTags.isNotEmpty)
                 Expanded(
                   child: SizedBox(
@@ -493,10 +466,6 @@ class _LibraryTopBar extends StatelessWidget {
     );
   }
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// _LibrarySearchBar — Campo de búsqueda con foco animado
-// ─────────────────────────────────────────────────────────────────────────────
 
 class _LibrarySearchBar extends StatelessWidget {
   const _LibrarySearchBar({
@@ -550,10 +519,6 @@ class _LibrarySearchBar extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Clases y Widgets Auxiliares
-// ─────────────────────────────────────────────────────────────────────────────
-
 class _FilterTag {
   _FilterTag(this.label, this.onRemove);
   final String label;
@@ -595,10 +560,6 @@ class _ActiveFilterChipWidget extends StatelessWidget {
   }
 }
 
-// =============================================================================
-// _LibraryGrid — GridView.builder de 2 columnas
-// =============================================================================
-
 class _LibraryGrid extends StatelessWidget {
   const _LibraryGrid({required this.games, required this.onGameTap});
 
@@ -631,10 +592,6 @@ class _LibraryGrid extends StatelessWidget {
   }
 }
 
-// =============================================================================
-// _ShakeToPlayFab — Botón flotante → ShakeSelectorScreen
-// =============================================================================
-
 class _ShakeToPlayFab extends StatelessWidget {
   const _ShakeToPlayFab();
 
@@ -648,7 +605,6 @@ class _ShakeToPlayFab extends StatelessWidget {
         height: 52,
         padding: const EdgeInsets.symmetric(horizontal: 20),
         decoration: BoxDecoration(
-          // Gradiente actualizado al amarillo de la marca
           gradient: LinearGradient(
             colors: [_kYellow, _kYellow.withValues(alpha: 0.75)],
           ),
@@ -681,10 +637,6 @@ class _ShakeToPlayFab extends StatelessWidget {
     );
   }
 }
-
-// =============================================================================
-// _EmptyState — Vista cuando no hay resultados
-// =============================================================================
 
 class _EmptyState extends StatelessWidget {
   const _EmptyState({required this.query});

@@ -12,7 +12,6 @@ const _bgCard   = Color(0xFF1A1A1A);
 const _bgCard2  = Color(0xFF222222);
 const _border   = Color(0xFF2A2A2A);
 const _yellow   = Color(0xFFFFB800);
-const _yellowDim = Color(0x33FFB800);
 const _textMain = Colors.white;
 const _textSub  = Color(0xFF888888);
 const _cyan      = Color(0xFF00E5FF);
@@ -39,7 +38,6 @@ class UserProfileScreen extends StatefulWidget {
 class _UserProfileScreenState extends State<UserProfileScreen> {
   User? _user;
   bool _isLoadingProfile = true;
-  String? _profileError;
   late Future<List<ApiGame>> _libraryFuture;
   Color _dominantColor = _yellow;
 
@@ -65,7 +63,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _profileError = e.toString();
+          // No mostramos error específico en la UI por ahora
           _isLoadingProfile = false;
         });
       }
@@ -82,7 +80,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         });
       }
     } catch (_) {}
-  }  Future<List<ApiGame>> _loadLibrary() async {
+  }
+
+  Future<List<ApiGame>> _loadLibrary() async {
     try {
       return await ApiService.getFriendLibrary(widget.user.id);
     } catch (e) {
@@ -592,7 +592,7 @@ class _GameListTile extends StatelessWidget {
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: ClipRRect(
         borderRadius: BorderRadius.circular(6),
-        child: Image.network(game.imageUrl, width: 40, height: 40, fit: BoxFit.cover, errorBuilder: (_,__,___) => Container(width: 40, height: 40, color: _bgCard2)),
+        child: Image.network(game.imageUrl, width: 40, height: 40, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => Container(width: 40, height: 40, color: _bgCard2)),
       ),
       title: Text(game.title, style: const TextStyle(color: _textMain, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
       subtitle: game.userPlaytime != null && game.userPlaytime! > 0

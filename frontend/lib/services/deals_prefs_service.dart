@@ -1,7 +1,6 @@
 // =============================================================================
 // deals_prefs_service.dart — Bound2Game Flutter
-// Servicio de persistencia para el motor de ofertas.
-// TODO(backend): Sincronizar con servidor para persistir entre dispositivos.
+// Servicio de persistencia local para preferencias del motor de ofertas.
 // =============================================================================
 
 import 'package:shared_preferences/shared_preferences.dart';
@@ -13,7 +12,7 @@ class DealsPrefService {
   static DealsPrefService? _instance;
   final SharedPreferences _prefs;
 
-  static const _kHiddenStores    = 'deals_hidden_stores';
+  static const _kHiddenStores = 'deals_hidden_stores';
   static const _kNotifPrefPrefix = 'deals_notif_free_';
 
   static Future<DealsPrefService> get instance async {
@@ -55,15 +54,14 @@ class DealsPrefService {
 
   Future<void> setFreeGamesAlert(DealStore store, bool enabled) async {
     await _prefs.setBool('$_kNotifPrefPrefix${store.name}', enabled);
-    // TODO(backend): Notificar al servidor para actualizar suscripciones push.
   }
 
   DealNotificationPrefs get notificationPrefs => DealNotificationPrefs(
-        freeGamesAlerts: {
-          for (final store in DealStore.values)
-            store: isFreeGamesAlertEnabled(store),
-        },
-      );
+    freeGamesAlerts: {
+      for (final store in DealStore.values)
+        store: isFreeGamesAlertEnabled(store),
+    },
+  );
 
   Future<void> resetAll() async {
     await _prefs.remove(_kHiddenStores);

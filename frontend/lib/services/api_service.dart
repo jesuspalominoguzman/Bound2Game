@@ -1,22 +1,5 @@
-// =============================================================================
-// api_service.dart — Bound2Game Flutter
-//
-// Capa de acceso a la API REST del backend Node.js.
-// Detecta automáticamente si el emulador es Android (10.0.2.2)
-// o iOS/físico (localhost).
-//
-// Rutas cubiertas:
-//   Auth      POST /api/users/register
-//             POST /api/users/login
-//   Biblioteca GET    /api/users/:userId/library
-//              POST   /api/users/:userId/library
-//              PATCH  /api/users/:userId/library/:entryId
-//              DELETE /api/users/:userId/library/:entryId
-//              GET    /api/users/:userId/stats
-//   Juegos    GET /api/games/search?title=...
-//             GET /api/games/deals
-//             GET /api/games/free
-// =============================================================================
+// Este archivo es el corazón de la comunicación con el servidor. Aquí definimos todas las llamadas para el login, la biblioteca, las ofertas y demás.
+// He intentado dejarlo bien organizado para no volverme loco cuando tenga que añadir rutas nuevas en el backend.
 
 import 'dart:convert';
 import 'dart:io' show Platform;
@@ -26,12 +9,7 @@ import 'auth_service.dart';
 import '../models/deal_model.dart';
 import '../models/user_model.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MODELOS DE RESPUESTA DEL BACKEND
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Juego tal como lo devuelve el backend (GameCache de MongoDB + datos extra).
-/// Contiene exactamente los campos que el backend serializa.
+// Cómo nos llega un juego desde el backend. He intentado que soporte todo: tiempos de HLTB, precios, requisitos...
 class ApiGame {
   final String  id;
   final String  title;
@@ -44,7 +22,7 @@ class ApiGame {
   final String? cheapestStore;
   final String? lowestPriceEver;
 
-  // Para entradas de la biblioteca del usuario
+  // Estos campos son específicos de cuando el juego ya está en la biblioteca de alguien.
   final String? entryId;
   final String? status;          // Backlog | Playing | Completed | Abandoned
   final String? personalNote;
@@ -52,9 +30,8 @@ class ApiGame {
   final DateTime? addedAt;
   final double? rentability;
   final String? pcRequirements;
-  final List<String> rawgPlatforms; // Plataformas detectadas por RAWG
+  final List<String> rawgPlatforms; 
   final int? userPlaytime;
-  // Metadatos extras de RAWG
   final int? releaseYear;
   final List<String> genres;
   final int? metacritic;
@@ -87,7 +64,7 @@ class ApiGame {
   });
 
   factory ApiGame.fromJson(Map<String, dynamic> json) {
-    // Si viene de UserLibrary poblado, los datos pueden estar en gameDetails o gameId
+    // A veces los datos vienen anidados en 'gameId' o 'game' dependiendo de la ruta.
     final gameData = json['gameId'] as Map<String, dynamic>? ?? json['game'] as Map<String, dynamic>? ?? json;
     final gameDetails = json['gameDetails'] as Map<String, dynamic>?;
     final hltb     = gameData['hltb'] as Map<String, dynamic>?;
@@ -95,7 +72,7 @@ class ApiGame {
     final steamId  = gameDetails?['id']?.toString() ?? gameData['steamAppID']?.toString();
     final title    = gameDetails?['name']?.toString() ?? gameData['title']?.toString() ?? 'Sin título';
     
-    // Construir URL de portada
+    // Si no tenemos imagen, intentamos pillarla de Steam usando su ID.
     String cover = gameDetails?['image']?.toString() ?? gameData['imageUrl']?.toString() ?? '';
     if (cover.isEmpty && steamId != null && steamId.isNotEmpty) {
       cover = 'https://cdn.akamai.steamstatic.com/steam/apps/$steamId/header.jpg';
@@ -114,7 +91,6 @@ class ApiGame {
       lowestPriceEver:  gameData['lowestPriceEver']?.toString(),
       rentability:      _toDouble(gameDetails?['rentability']),
       pcRequirements:   gameData['pcRequirements']?.toString() ?? gameData['requirements']?['minimum']?.toString(),
-      // Campos de la entrada de biblioteca
       entryId:          (json['userId'] != null || json['gameId'] != null || json['status'] != null) 
                           ? json['_id']?.toString() 
                           : json['entryId']?.toString(),
@@ -133,21 +109,21 @@ class ApiGame {
     );
   }
 
+  // Un pequeño apaño para convertir cualquier cosa a número decimal sin que la app pete.
   static double? _toDouble(dynamic value) {
     if (value == null) return null;
     if (value is num) return value.toDouble();
     return double.tryParse(value.toString());
   }
 
-  /// URL de portada con fallback a Unsplash genérico
+  // Si no hay portada, ponemos una genérica de Unsplash para que no quede el hueco feo.
   String get coverUrl {
     if (imageUrl.isNotEmpty) return imageUrl;
     return 'https://images.unsplash.com/photo-1614294148960-9aa740632a87?w=400&q=80';
   }
 }
 
-/// Resultado ligero de búsqueda de usuarios.
-/// Solo contiene los campos necesarios para la UI del SearchDelegate.
+// Los datos básicos que necesitamos cuando buscamos a alguien para agregarlo.
 class UserSearchResult {
   final String  id;
   final String  username;
@@ -169,7 +145,7 @@ class UserSearchResult {
   );
 }
 
-/// Estadísticas de la biblioteca del usuario
+// Para mostrar en el perfil cuántos juegos tenemos en total, cuántos hemos terminado, etc.
 class LibraryStats {
   final int total;
   final int completed;
@@ -202,13 +178,13 @@ class LibraryStats {
   );
 }
 
-/// Deal/oferta tal como la devuelve el backend normalizado
+// Cómo nos llega una oferta desde el backend.
 class ApiDeal {
   final String  gameId;
   final String  gameTitle;
   final String? gameCover;
-  final String  store;           // Clave interna (steam, epic, etc.)
-  final String  storeName;       // Nombre legible
+  final String  store;           
+  final String  storeName;       
   final double  originalPrice;
   final double  salePrice;
   final int     discountPercent;
@@ -231,7 +207,6 @@ class ApiDeal {
   });
 
   factory ApiDeal.fromJson(Map<String, dynamic> j) {
-    // Construir portada: preferimos thumb del backend, fallback Steam CDN
     String? cover = j['gameCover']?.toString();
     final sid = j['steamAppID']?.toString();
     if ((cover == null || cover.isEmpty) && sid != null && sid.isNotEmpty) {
@@ -259,10 +234,7 @@ class ApiDeal {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// EXCEPCIÓN PERSONALIZADA
-// ─────────────────────────────────────────────────────────────────────────────
-
+// Para cuando el servidor nos suelta un error, que la app sepa qué ha pasado.
 class ApiException implements Exception {
   final String message;
   final int?   statusCode;
@@ -272,23 +244,18 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ApiService
-// ─────────────────────────────────────────────────────────────────────────────
-
+// Aquí es donde hacemos las peticiones HTTP reales al servidor.
 class ApiService {
-  // ── URL base auto-detectada ───────────────────────────────────────────────
-  //   Android emulator: las peticiones a "localhost" van al emulador, no al PC.
-  //   Por eso usamos la IP especial 10.0.2.2 que apunta al host de Windows.
-  //   iOS Simulator / dispositivo físico: localhost o la IP del PC en red local.
+  
+  // Detectamos si estamos en el emulador de Android o en iOS/móvil real para saber a qué IP llamar.
   static String get baseUrl {
-    // 1. Usar variable de entorno si existe (.env) para móviles físicos
+    // Si tenemos una URL en el .env, usamos esa primero.
     final envUrl = dotenv.env['API_URL'];
     if (envUrl != null && envUrl.isNotEmpty) {
       return envUrl;
     }
 
-    // 2. Fallback por defecto de Jesús
+    // El emulador de Android usa la 10.0.2.2 para hablar con el PC.
     try {
       if (Platform.isAndroid) {
         return 'http://10.0.2.2:3000';
@@ -297,10 +264,9 @@ class ApiService {
     return 'http://localhost:3000';
   }
 
-  // ── Timeout global ────────────────────────────────────────────────────────
   static const _timeout = Duration(seconds: 20);
 
-  // ── Cabeceras comunes ─────────────────────────────────────────────────────
+  // Preparamos las cabeceras, metiendo el token de seguridad si hace falta.
   static Future<Map<String, String>> _headers({bool withAuth = false}) async {
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (withAuth) {
@@ -310,33 +276,29 @@ class ApiService {
     return headers;
   }
 
-  // ── Helper: parsear respuesta ─────────────────────────────────────────────
+  // Este método se encarga de leer lo que nos dice el servidor. Si algo va mal, lanza un error.
   static Map<String, dynamic> _parse(http.Response r) {
     if (r.statusCode >= 200 && r.statusCode < 300) {
       try {
         return jsonDecode(r.body) as Map<String, dynamic>;
       } catch (_) {
-        throw ApiException('Respuesta inesperada del servidor', statusCode: r.statusCode);
+        throw ApiException('El servidor ha respondido algo raro...', statusCode: r.statusCode);
       }
     }
-    // Intentar parsear JSON del error; si es HTML (ej. 404 de nginx) capturar y crear mensaje claro
     try {
       final body = jsonDecode(r.body) as Map<String, dynamic>? ?? {};
       final msg  = body['error']?.toString() ?? 'Error ${r.statusCode}';
       throw ApiException(msg, statusCode: r.statusCode);
     } catch (e) {
       if (e is ApiException) rethrow;
-      // El body no era JSON (era HTML) — dar mensaje genérico con el código
-      throw ApiException('Error del servidor (${r.statusCode}). Comprueba que el backend está activo.',
+      throw ApiException('Vaya, parece que el servidor está caído (${r.statusCode})',
           statusCode: r.statusCode);
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // AUTH
-  // ══════════════════════════════════════════════════════════════════════════
+  // --- RUTAS DE AUTENTICACIÓN ---
 
-  /// POST /api/users/login — devuelve AuthSession y la persiste
+  // Para entrar en la app. Si todo va bien, guardamos la sesión.
   static Future<AuthSession> login(String email, String password) async {
     final r = await http
         .post(
@@ -353,7 +315,7 @@ class ApiService {
     return AuthSession(token: token, user: user);
   }
 
-  /// POST /api/users/register
+  // Para crear una cuenta nueva.
   static Future<void> register(
       String username, String email, String password) async {
     final r = await http
@@ -368,10 +330,10 @@ class ApiService {
         )
         .timeout(_timeout);
 
-    _parse(r); // lanza ApiException si falla
+    _parse(r); 
   }
 
-  /// PUT /api/users/me/pc-components
+  // Para guardar qué PC tenemos.
   static Future<void> updatePcComponents({
     String? cpu,
     String? gpu,
@@ -394,6 +356,7 @@ class ApiService {
 
     final data = _parse(r);
     
+    // Actualizamos la sesión guardada para que los cambios se vean al momento.
     final session = await AuthService.loadSession();
     if (session != null && data['pcComponents'] != null) {
       final updatedUser = AuthUser(
@@ -408,7 +371,7 @@ class ApiService {
     }
   }
 
-  /// PUT /api/users/me/platforms
+  // Para vincular cuentas de Steam, Epic, etc.
   static Future<void> updatePlatforms({
     String? steamId,
     String? epicId,
@@ -432,36 +395,24 @@ class ApiService {
     _parse(r);
   }
 
-  // ───────────────────────────────────────────────────────────────────────────
-  // USUARIOS
-  // ───────────────────────────────────────────────────────────────────────────
+  // --- RUTAS DE USUARIOS Y AMIGOS ---
 
-  /// Obtener perfil propio
+  // Pillamos nuestro propio perfil.
   static Future<User> fetchMyProfile() async {
-    try {
-      final res = await http.get(Uri.parse('$baseUrl/api/users/me'), headers: await _headers(withAuth: true));
-      final data = _parse(res);
-      return User.fromJson(data['user']);
-    } catch (e) {
-      print('[ApiService] Error fetching my profile: $e');
-      rethrow;
-    }
+    final res = await http.get(Uri.parse('$baseUrl/api/users/me'), headers: await _headers(withAuth: true));
+    final data = _parse(res);
+    return User.fromJson(data['user']);
   }
 
-  /// Obtener lista de amigos
+  // Pedimos la lista de amigos.
   static Future<List<User>> fetchFriends() async {
-    try {
-      final res = await http.get(Uri.parse('$baseUrl/api/users/friends'), headers: await _headers(withAuth: true));
-      final data = _parse(res);
-      final friendsList = data['friends'] as List? ?? [];
-      return friendsList.map((j) => User.fromJson(j as Map<String, dynamic>)).toList();
-    } catch (e) {
-      print('[ApiService] Error fetching friends: $e');
-      rethrow;
-    }
+    final res = await http.get(Uri.parse('$baseUrl/api/users/friends'), headers: await _headers(withAuth: true));
+    final data = _parse(res);
+    final friendsList = data['friends'] as List? ?? [];
+    return friendsList.map((j) => User.fromJson(j as Map<String, dynamic>)).toList();
   }
 
-  /// GET /api/users/pending-requests
+  // Miramos si alguien nos ha mandado una solicitud de amistad.
   static Future<List<UserSearchResult>> getPendingRequests() async {
     final r = await http
         .get(
@@ -475,7 +426,7 @@ class ApiService {
     return list.map((u) => UserSearchResult.fromJson(u as Map<String, dynamic>)).toList();
   }
 
-  /// GET /api/users/:userId/profile-public
+  // Ver el perfil de otro jugador.
   static Future<User> getUserProfilePublic(String userId) async {
     final r = await http
         .get(
@@ -488,7 +439,7 @@ class ApiService {
     return User.fromJson(data['profile'] as Map<String, dynamic>);
   }
 
-  /// POST /api/users/:userId/rate
+  // Darle un "me gusta" o "no me gusta" a alguien.
   static Future<Map<String, dynamic>> rateUser(String userId, String action) async {
     final r = await http
         .post(
@@ -501,7 +452,7 @@ class ApiService {
     return _parse(r);
   }
 
-  /// GET /api/users/search?q=... — Buscar usuarios en la BD (regex insensible)
+  // Buscar gente por su nombre de usuario.
   static Future<List<UserSearchResult>> searchUsers(String q) async {
     if (q.isEmpty) return [];
     final uri = Uri.parse('$baseUrl/api/users/search')
@@ -516,8 +467,7 @@ class ApiService {
         .toList();
   }
 
-  /// POST /api/users/friend-request — Enviar o aceptar solicitud de amistad
-  /// Devuelve el estado resultante: 'pending' | 'accepted' | 'friends'
+  // Mandar una solicitud de amistad o aceptar una que nos hayan mandado.
   static Future<String> sendFriendRequest(String targetId) async {
     final r = await http
         .post(
@@ -526,7 +476,6 @@ class ApiService {
           body: jsonEncode({'targetId': targetId}),
         )
         .timeout(_timeout);
-    // 409 puede ser un estado válido (ya amigos / ya pendiente), no lo lanzamos
     if (r.statusCode == 409) {
       final body = jsonDecode(r.body) as Map<String, dynamic>;
       return body['status']?.toString() ?? 'error';
@@ -535,7 +484,7 @@ class ApiService {
     return data['status']?.toString() ?? 'pending';
   }
 
-  /// GET /api/users/:friendId/library-public — Biblioteca pública de un amigo
+  // Ver qué juegos tiene un amigo.
   static Future<List<ApiGame>> getFriendLibrary(String friendId) async {
     final r = await http
         .get(
@@ -550,8 +499,7 @@ class ApiService {
         .toList();
   }
 
-  /// GET /api/users/:userId/library-preview — Vista previa sin requerir amistad.
-  /// Permite ver los juegos de un usuario antes de añadirlo como amigo.
+  // Echar un ojo a la biblioteca de alguien antes de agregarlo.
   static Future<List<ApiGame>> getUserLibraryPreview(String userId) async {
     if (userId.isEmpty) return [];
     final r = await http
@@ -567,11 +515,9 @@ class ApiService {
         .toList();
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // BIBLIOTECA DEL USUARIO
-  // ══════════════════════════════════════════════════════════════════════════
+  // --- RUTAS DE BIBLIOTECA ---
 
-  /// GET /api/users/:userId/library
+  // Pillamos nuestra propia lista de juegos.
   static Future<List<ApiGame>> getLibrary(String userId) async {
     final r = await http
         .get(
@@ -587,7 +533,7 @@ class ApiService {
         .toList();
   }
 
-  /// GET /api/users/:userId/stats
+  // Miramos las estadísticas de nuestra biblioteca (cuántos terminados, etc).
   static Future<LibraryStats> getStats(String userId) async {
     final r = await http
         .get(
@@ -599,7 +545,7 @@ class ApiService {
     return LibraryStats.fromJson(_parse(r));
   }
 
-  /// POST /api/users/:userId/library — añadir juego
+  // Para añadir un juego nuevo a nuestra colección.
   static Future<String?> addToLibrary({
     required String userId,
     required String gameTitle,
@@ -619,11 +565,10 @@ class ApiService {
         .timeout(_timeout);
 
     final data = _parse(r);
-    // El backend devuelve { entry: { _id: '...', ... } }
     return data['entry']?['_id']?.toString();
   }
 
-  /// PATCH /api/users/:userId/library/:entryId — actualizar estado o nota
+  // Para cambiar el estado de un juego o poner una nota personal.
   static Future<void> updateLibraryEntry({
     required String userId,
     required String entryId,
@@ -649,7 +594,7 @@ class ApiService {
     _parse(r);
   }
 
-  /// GET /api/users/:userId/library/:entryId
+  // Pillamos todos los detalles de un juego de nuestra biblioteca.
   static Future<Map<String, dynamic>> getGameDetails({
     required String userId,
     required String entryId,
@@ -671,7 +616,7 @@ class ApiService {
     };
   }
 
-  /// DELETE /api/users/:userId/library/:entryId
+  // Para borrar un juego de la biblioteca.
   static Future<void> removeFromLibrary({
     required String userId,
     required String entryId,
@@ -686,11 +631,9 @@ class ApiService {
     _parse(r);
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // JUEGOS — BÚSQUEDA
-  // ══════════════════════════════════════════════════════════════════════════
+  // --- RUTAS DE BÚSQUEDA Y OFERTAS ---
 
-  /// GET /api/games/search?title=...
+  // Buscamos un juego por su título para ver sus detalles.
   static Future<List<ApiGame>> searchGame(String title) async {
     final uri = Uri.parse('$baseUrl/api/games/search')
         .replace(queryParameters: {'title': title});
@@ -708,11 +651,7 @@ class ApiService {
     }
   }
 
-  // ══════════════════════════════════════════════════════════════════════════
-  // DEALS
-  // ══════════════════════════════════════════════════════════════════════════
-
-  /// GET /api/games/deals
+  // Pillamos las ofertas más destacadas.
   static Future<List<Deal>> fetchDeals({int limit = 20}) async {
     final uri = Uri.parse('$baseUrl/api/games/deals')
         .replace(queryParameters: {'limit': limit.toString()});
@@ -728,7 +667,7 @@ class ApiService {
         .toList();
   }
 
-  /// GET /api/games/free
+  // Pillamos los juegos que están gratis ahora mismo. ¡Lo que más nos gusta!
   static Future<List<Deal>> fetchFreeGames() async {
     final r = await http
         .get(
@@ -744,7 +683,7 @@ class ApiService {
         .toList();
   }
 
-  /// GET /api/games/deals/:title
+  // Buscamos si un juego concreto tiene alguna oferta activa.
   static Future<List<Deal>> fetchDealsByGame(String title) async {
     final uri = Uri.parse('$baseUrl/api/games/deals/${Uri.encodeComponent(title)}');
     final r = await http
@@ -758,7 +697,7 @@ class ApiService {
         .toList();
   }
 
-  /// GET /api/games/upcoming
+  // Miramos qué juegos van a salir pronto.
   static Future<List<Deal>> fetchUpcomingGames() async {
     final r = await http
         .get(
@@ -772,18 +711,5 @@ class ApiService {
     return games
         .map((g) => Deal.fromJson(g as Map<String, dynamic>))
         .toList();
-  }
-
-  /// PUT /api/users/me/fcm-token
-  static Future<void> updateFcmToken(String fcmToken) async {
-    try {
-      await http.put(
-        Uri.parse('$baseUrl/api/users/me/fcm-token'),
-        headers: await _headers(withAuth: true),
-        body: jsonEncode({'fcmToken': fcmToken}),
-      ).timeout(_timeout);
-    } catch (e) {
-      print('❌ [ApiService] Error al actualizar FCM Token: $e');
-    }
   }
 }

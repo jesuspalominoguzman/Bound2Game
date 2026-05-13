@@ -1,6 +1,5 @@
-// =============================================================================
-// social_screen.dart — Bound2Game Flutter
-// =============================================================================
+// Esta es la pantalla social. Aquí es donde vemos a nuestros amigos, quién está conectado y qué juegos están pegando fuerte ahora mismo.
+// La idea es que sea el centro de la comunidad de la app.
 
 import 'dart:async';
 import 'package:flutter/material.dart';
@@ -13,13 +12,13 @@ import 'user_search_delegate.dart';
 import 'user_profile_screen.dart';
 import 'game_detail_screen.dart';
 
-// ── Constantes de color ───────────────────────────────────────────────────────
+// Mis colores para que todo quede conjuntado.
 const _bg        = Color(0xFF292929);
 const _bgCard    = Color(0xFF1A1A1A);
 const _border    = Color(0xFF252525);
 const _textMain  = Colors.white;
-const _textMuted = Color(0xFF555555);
 const _textSub   = Color(0xFF888888);
+const _textMuted = Color(0xFF555555);
 const _green     = Color(0xFF4AF626);
 const _yellow    = Color(0xFFFFB800);
 
@@ -46,6 +45,7 @@ class _SocialScreenState extends State<SocialScreen> {
   @override
   void initState() {
     super.initState();
+    // Al entrar, cargamos los datos y nos ponemos a escuchar los cambios de presencia en tiempo real.
     _loadData();
 
     _searchCtrl.addListener(
@@ -55,10 +55,11 @@ class _SocialScreenState extends State<SocialScreen> {
       () => setState(() => _isSearchFocused = _searchFocus.hasFocus),
     );
 
-    // Escuchar cambios de presencia en tiempo real a través del Stream global
+    // Esto es clave: escuchamos al servidor por si alguien se conecta o desconecta.
     _presenceSub = PresenceService.instance.presenceUpdates.listen(_onPresenceUpdate);
   }
 
+  // Si un amigo se conecta o se desconecta, actualizamos la lista al momento.
   void _onPresenceUpdate(Map<String, dynamic> data) {
     if (!mounted) return;
     final userId = data['userId'] as String?;
@@ -73,6 +74,7 @@ class _SocialScreenState extends State<SocialScreen> {
     }
   }
 
+  // Cargamos los amigos y las solicitudes que tengamos pendientes.
   void _loadData() {
     _friendsFuture = ApiService.fetchFriends().then((friends) {
       if (mounted) setState(() => _friendsList = friends);
@@ -94,24 +96,25 @@ class _SocialScreenState extends State<SocialScreen> {
     super.dispose();
   }
 
-  void _openUserSearch(List<User> friends) {
-    final friendIds = friends.map((f) => f.id).toSet();
+  // Abrimos el buscador para encontrar a gente nueva.
+  void _openUserSearch() {
     showSearch(
       context: context,
-      delegate: UserSearchDelegate(myFriendIds: friendIds),
-    ).then((_) => setState(_loadData)); // refrescar al volver
+      delegate: B2GUserSearchDelegate(),
+    ).then((_) => setState(_loadData)); 
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: _bg,
+      // El botón para buscar jugadores.
       floatingActionButton: FutureBuilder<List<User>>(
         future: _friendsFuture,
         builder: (context, snapshot) {
           return FloatingActionButton(
             heroTag: 'social_search_fab',
-            onPressed: () => _openUserSearch(_friendsList),
+            onPressed: () => _openUserSearch(),
             backgroundColor: _yellow,
             foregroundColor: Colors.black,
             elevation: 6,
@@ -135,7 +138,7 @@ class _SocialScreenState extends State<SocialScreen> {
                 children: [
                   const Icon(Icons.error_outline_rounded, color: _textSub, size: 48),
                   const SizedBox(height: 16),
-                  Text('Error al cargar amigos', style: TextStyle(color: _textSub)),
+                  const Text('Error al cargar amigos', style: TextStyle(color: _textSub)),
                   const SizedBox(height: 16),
                   TextButton(
                     onPressed: _refresh,
@@ -146,6 +149,7 @@ class _SocialScreenState extends State<SocialScreen> {
             );
           }
 
+          // Filtramos la lista según lo que escriba el usuario o si quiere ver solo a los conectados.
           final filtered = _friendsList.where((user) {
             final matchesSearch = _searchQuery.isEmpty ||
                 user.username.toLowerCase().contains(_searchQuery);
@@ -165,7 +169,7 @@ class _SocialScreenState extends State<SocialScreen> {
               slivers: [
                 const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-                // ── Solicitudes de amistad pendientes ─────────────────────────
+                // Aquí mostramos si alguien nos ha mandado una solicitud de amistad.
                 SliverToBoxAdapter(
                   child: _PendingRequestsSection(
                     future: _pendingFuture,
@@ -173,13 +177,13 @@ class _SocialScreenState extends State<SocialScreen> {
                   ),
                 ),
 
-                // ── Sección: Populares entre tus amigos (datos reales) ──────
+                // Una sección chula que mira a qué están jugando mis amigos.
                 SliverToBoxAdapter(
                   child: _PopularGamesSection(friends: _friendsList),
                 ),
                 const SliverToBoxAdapter(child: SizedBox(height: 32)),
 
-                // ── Sección 2: Tus Amigos ──────────────────────────────────────────
+                // La lista de amigos con su buscador y filtro.
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -227,7 +231,7 @@ class _SocialScreenState extends State<SocialScreen> {
                 ),
                 const SliverToBoxAdapter(child: SizedBox(height: 16)),
 
-                // ── Lista de amigos ────────────────────────────────────────────────
+                // Si no tenemos amigos o no coinciden con la búsqueda, mostramos un mensaje.
                 _friendsList.isEmpty
                     ? SliverToBoxAdapter(
                         child: _NoFriendsState(),
@@ -249,7 +253,6 @@ class _SocialScreenState extends State<SocialScreen> {
                             ),
                           ),
 
-                // Padding inferior
                 const SliverToBoxAdapter(child: SizedBox(height: 100)),
               ],
             ),

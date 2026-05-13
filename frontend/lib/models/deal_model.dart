@@ -1,18 +1,10 @@
-// =============================================================================
-// deal_model.dart — Bound2Game Flutter
-// Sistema de Ofertas Globales (Deals Engine)
-//
-// Diseñado para ser agnóstico de la fuente de datos:
-//   TODO(backend): Sustituir sampleDeals por una llamada a la API de ofertas
-//   (IsThereAnyDeal, CheapShark, o endpoint propio de Bound2Game).
-// =============================================================================
+// Este archivo es el cerebro de las ofertas. Aquí definimos qué datos nos interesan de un "chollo": el precio original, el rebajado y en qué tienda está.
+// He intentado que sea muy automático para que la app sepa qué tienda es solo con leer el nombre.
 
 import 'package:flutter/material.dart';
+import 'game_model.dart';
 
-// =============================================================================
-// MODEL: Deal (Nueva integración API backend)
-// =============================================================================
-
+// Un "chollo" individual. Me traigo la info del servidor y calculo cuánto nos ahorramos de verdad.
 class Deal {
   final String id;
   final String title;
@@ -50,18 +42,7 @@ class Deal {
     );
   }
 
-  Map<String, dynamic> toJson() {
-    return {
-      'gameId': id,
-      'title': title,
-      'originalPrice': normalPrice,
-      'salePrice': salePrice,
-      'storeName': storeName,
-      'thumb': thumbUrl,
-      'category': category,
-    };
-  }
-
+  // Intentamos adivinar la tienda basándonos en el nombre que nos manda la API para ponerle el logo que toca.
   DealStore get storeEnum {
     final s = storeName.toLowerCase();
     if (s.contains('steam')) return DealStore.steam;
@@ -72,18 +53,39 @@ class Deal {
     return DealStore.other;
   }
 
+  // Sacamos el porcentaje de descuento para que el usuario sepa si es una ganga o no.
   int get calculatedDiscount {
     if (normalPrice <= 0 || salePrice <= 0) return 0;
     if (salePrice >= normalPrice) return 0;
     return ((1 - (salePrice / normalPrice)) * 100).round();
   }
+
+  // Un pequeño truco para convertir una oferta en un objeto "Juego" por si queremos ver sus detalles en la otra pantalla.
+  Game toGame() {
+    Platform platform;
+    switch (storeEnum) {
+      case DealStore.steam: platform = Platform.steam; break;
+      case DealStore.epic:  platform = Platform.epic; break;
+      default:              platform = Platform.integrated; break;
+    }
+
+    return Game(
+      id: int.tryParse(id) ?? 999,
+      title: title,
+      platform: platform,
+      genre: 'Varios',
+      playtime: 0,
+      status: GameStatus.unplayed,
+      cover: thumbUrl,
+      pcReq: PcReq.green,
+      hasCosmetics: false,
+      price: normalPrice,
+      year: DateTime.now().year,
+    );
+  }
 }
 
-
-// =============================================================================
-// ENUM: PlayerMode — Modo de juego
-// =============================================================================
-
+// Para saber si el juego es para jugar solo o con amigos.
 enum PlayerMode {
   solo,
   multi,
@@ -91,17 +93,14 @@ enum PlayerMode {
 
   String get label {
     switch (this) {
-      case PlayerMode.solo:  return 'Single Player';
+      case PlayerMode.solo:  return 'Un jugador';
       case PlayerMode.multi: return 'Multijugador';
       case PlayerMode.both:  return 'Ambos';
     }
   }
 }
 
-// =============================================================================
-// ENUM: DealStore — Tiendas soportadas
-// =============================================================================
-
+// Las tiendas que vigilamos para encontrar ofertas. He incluido las principales de PC y consolas.
 enum DealStore {
   steam,
   epic,
@@ -113,10 +112,7 @@ enum DealStore {
   DealStoreConfig get config => DealStoreConfig.of(this);
 }
 
-// =============================================================================
-// CONFIG: DealStoreConfig
-// =============================================================================
-
+// Aquí asocio cada tienda con su color y su icono oficial.
 class DealStoreConfig {
   final String name;
   final Color color;
@@ -171,7 +167,7 @@ class DealStoreConfig {
         );
       case DealStore.other:
         return DealStoreConfig(
-          name: 'Store', shortName: 'ST',
+          name: 'Tienda', shortName: 'ST',
           color: const Color(0xFF888888),
           background: const Color(0xFF888888).withValues(alpha: 0.12),
           icon: Icons.storefront_rounded,
@@ -180,10 +176,7 @@ class DealStoreConfig {
   }
 }
 
-// =============================================================================
-// MODEL: GameDeal
-// =============================================================================
-
+// Esta clase es para cuando los datos vienen un poco más detallados del servidor.
 class GameDeal {
   final String gameId;
   final String gameTitle;
@@ -215,8 +208,6 @@ class GameDeal {
     this.playerMode,
   });
 
-  // ── Factory: construir desde la respuesta del backend (ApiDeal normalizado) ──
-  /// Mapea la clave `store` del backend (ej. "steam", "epic") al enum [DealStore].
   factory GameDeal.fromApiJson(Map<String, dynamic> json) {
     final storeStr = json['store']?.toString() ?? 'steam';
     final store = _storeFromString(storeStr);
@@ -254,36 +245,11 @@ class GameDeal {
     return double.tryParse(v.toString()) ?? 0;
   }
 
-
-  GameDeal copyWith({
-    String? gameId, String? gameTitle, String? gameCover, DealStore? store,
-    double? originalPrice, double? salePrice, int? discountPercent,
-    bool? isFree, String? dealUrl, DateTime? expiresAt,
-    String? genre, PlayerMode? playerMode,
-  }) => GameDeal(
-    gameId: gameId ?? this.gameId,
-    gameTitle: gameTitle ?? this.gameTitle,
-    gameCover: gameCover ?? this.gameCover,
-    store: store ?? this.store,
-    originalPrice: originalPrice ?? this.originalPrice,
-    salePrice: salePrice ?? this.salePrice,
-    discountPercent: discountPercent ?? this.discountPercent,
-    isFree: isFree ?? this.isFree,
-    dealUrl: dealUrl ?? this.dealUrl,
-    expiresAt: expiresAt ?? this.expiresAt,
-    genre: genre ?? this.genre,
-    playerMode: playerMode ?? this.playerMode,
-  );
-
-  String get salePriceLabel =>
-      isFree ? 'GRATIS' : '${salePrice.toStringAsFixed(2)} €';
+  String get salePriceLabel => isFree ? 'GRATIS' : '${salePrice.toStringAsFixed(2)} €';
   String get originalPriceLabel => '${originalPrice.toStringAsFixed(2)} €';
 }
 
-// =============================================================================
-// MODEL: DealNotificationPrefs
-// =============================================================================
-
+// Para guardar si queremos que el móvil nos avise cuando haya juegos gratis.
 class DealNotificationPrefs {
   final Map<DealStore, bool> freeGamesAlerts;
   const DealNotificationPrefs({required this.freeGamesAlerts});
@@ -300,8 +266,3 @@ class DealNotificationPrefs {
 
   bool isAlertEnabled(DealStore store) => freeGamesAlerts[store] ?? true;
 }
-
-// =============================================================================
-// DATOS ELIMINADOS (Ahora se usa la API real en DealsScreen)
-// =============================================================================
-

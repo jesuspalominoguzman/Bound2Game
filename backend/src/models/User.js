@@ -63,12 +63,7 @@ const userSchema = new mongoose.Schema({
             type: String
         }]
     },
-    hardwareSpecs: {
-        cpu: { type: String, default: '' },
-        gpu: { type: String, default: '' },
-        ram: { type: Number, default: 0 },
-        vram: { type: Number, default: 0 }
-    },
+
     pcComponents: {
         cpu: { type: String, default: '' },
         gpu: { type: String, default: '' },

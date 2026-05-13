@@ -1,93 +1,61 @@
-// =============================================================================
-// app_theme.dart — Bound2Game Flutter (Android)
-// Fuente: InterfazdeusuarioBound2game - CORRECTO
-//   ├── src/styles/theme.css  → colores light & dark
-//   └── src/styles/fonts.css  → tipografía Inter
-// La app usa EXCLUSIVAMENTE el modo oscuro (.dark del CSS).
-// =============================================================================
+// Aquí es donde defino el estilo de toda la app. He elegido colores oscuros y un amarillo potente porque queda muy gaming y profesional.
+// Me he basado en un diseño moderno de "modo oscuro" puro para que no canse la vista al jugar de noche.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// COLORES — extraídos de theme.css (.dark block) y gameData.ts configs
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Paleta de colores del sistema de diseño Bound2Game.
+// Esta es mi paleta de colores oficial. El negro puro para el fondo y el amarillo Bound2Game para destacar lo importante.
 abstract final class AppColors {
-  // ── Fondos ────────────────────────────────────────────────────────────────
-  /// Fondo principal: Negro puro (#000000)
+  // Fondos: Negro puro y grises muy oscuros.
   static const Color background      = Color(0xFF000000);
-  /// Superficie de tarjetas: Gris oscuro (#282828)
   static const Color card            = Color(0xFF282828);
-  /// Sidebar / barra de navegación
   static const Color sidebar         = Color(0xFF000000);
-  /// Surface secundaria (chips, inputs resting)
   static const Color surface         = Color(0xFF333333);
-  /// Fondo de campos de texto
   static const Color inputBackground = Color(0xFF111111);
 
-  // ── Primer plano ──────────────────────────────────────────────────────────
-  /// Texto principal: Blanco puro (#FFFFFF)
+  // Textos: Blanco para que resalte y grises para lo menos importante.
   static const Color foreground      = Color(0xFFFFFFFF);
-  /// Texto secundario / muted
   static const Color mutedForeground = Color(0xFFAAAAAA);
 
-  // ── Primario (blanco suave para textos sobre acento) ──────────────────────
   static const Color primary            = Color(0xFFFFFFFF);
   static const Color primaryForeground  = Color(0xFF000000);
 
-  // ── Acento principal: Amarillo (#FFE600) ──────────────────────────────
-  /// Color de acento global — botones, bordes activos, íconos seleccionados.
+  // El amarillo Bound2Game. Es el alma de la app.
   static const Color accent            = Color(0xFFFFE600);
-  /// Variante clara/secundaria del acento para gradientes (#FFF566)
   static const Color accentDark        = Color(0xFFFFF566);
-  /// Foreground sobre botones de acento (negro para contraste)
   static const Color accentForeground  = Color(0xFF000000);
 
-  // Alias semántico: sidebarPrimary ahora apunta al acento amarillo
   static const Color sidebarPrimary            = accent;
   static const Color sidebarPrimaryForeground  = accentForeground;
 
-  // ── Destructivo ───────────────────────────────────────────────────────────
+  // Rojo para cuando algo va mal o queremos borrar algo.
   static const Color destructive           = Color(0xFF8B2020);
   static const Color destructiveForeground = Color(0xFFFF6B6B);
 
-  // ── Bordes ────────────────────────────────────────────────────────────────
   static const Color border = Color(0xFF2A2A2A);
   static const Color ring   = Color(0xFF3A3A3A);
 
-  // ── Reputación (REPUTATION_CONFIG en gameData.ts) ─────────────────────────
+  // Colores para el sistema de reputación de los usuarios.
   static const Color repLegendary = Color(0xFFFFD700);
   static const Color repExemplar  = Color(0xFF4AF626);
   static const Color repPositive  = Color(0xFF00E5FF);
   static const Color repNeutral   = Color(0xFF888888);
   static const Color repNegative  = Color(0xFFFF4040);
 
-  static Color repLegendaryBg = const Color(0xFFFFD700).withValues(alpha: 0.15);
-  static Color repExemplarBg  = const Color(0xFF4AF626).withValues(alpha: 0.15);
-  static Color repPositiveBg  = const Color(0xFF00E5FF).withValues(alpha: 0.15);
-  static Color repNeutralBg   = const Color(0xFF888888).withValues(alpha: 0.15);
-  static Color repNegativeBg  = const Color(0xFFFF4040).withValues(alpha: 0.15);
-
-  // ── Plataformas (PLATFORM_CONFIG en gameData.ts) ──────────────────────────
+  // Colores oficiales de las plataformas de juegos.
   static const Color platformSteam = Color(0xFF1B9ED9);
   static const Color platformEpic  = Color(0xFFFFFFFF);
   static const Color platformIg    = Color(0xFFFF6B00);
   static const Color platformB2g   = Color(0xFF9B59B6);
 
-  // ── Requisitos de PC (PC_REQ_CONFIG en gameData.ts) ───────────────────────
+  // El semáforo de requisitos de PC.
   static const Color pcReqGreen  = Color(0xFF4AF626);
   static const Color pcReqYellow = Color(0xFFFFB800);
   static const Color pcReqRed    = Color(0xFFFF4040);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// RADIO DE BORDES
-// --radius: 0.625rem = 10px → sm=6, md=8, lg=10, xl=14
-// ─────────────────────────────────────────────────────────────────────────────
-
+// Los bordes redondeados. Me gusta que la app tenga un toque suave, así que nada de esquinas afiladas.
 abstract final class AppRadius {
   static const double sm   = 6.0;
   static const double md   = 8.0;
@@ -102,10 +70,7 @@ abstract final class AppRadius {
   static BorderRadius get roundedFull => BorderRadius.circular(full);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ESPACIADO — escala de 4px (equivalente a Tailwind p-1 = 4px)
-// ─────────────────────────────────────────────────────────────────────────────
-
+// Para que los márgenes y rellenos sean siempre iguales y todo quede bien alineado.
 abstract final class AppSpacing {
   static const double xs  = 4.0;
   static const double sm  = 8.0;
@@ -118,42 +83,29 @@ abstract final class AppSpacing {
   static const double xl5 = 48.0;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TIPOGRAFÍA — Inter (Google Fonts), mismos pesos que fonts.css
-// Tamaños: xs=12, sm=14, base=16, lg=18, xl=20, 2xl=24, 3xl=30
-// ─────────────────────────────────────────────────────────────────────────────
-
+// La tipografía de la app. Uso la fuente "Inter" porque es moderna y se lee de lujo.
 abstract final class AppTextStyles {
-  // Encabezados (h1-h4, font-weight-medium = 500)
   static TextStyle get h1 => GoogleFonts.inter(fontSize: 24, fontWeight: FontWeight.w500, height: 1.5, color: AppColors.foreground);
   static TextStyle get h2 => GoogleFonts.inter(fontSize: 20, fontWeight: FontWeight.w500, height: 1.5, color: AppColors.foreground);
   static TextStyle get h3 => GoogleFonts.inter(fontSize: 18, fontWeight: FontWeight.w500, height: 1.5, color: AppColors.foreground);
   static TextStyle get h4 => GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500, height: 1.5, color: AppColors.foreground);
 
-  // Cuerpo (font-weight-normal = 400)
   static TextStyle get bodyLarge  => GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w400, height: 1.5, color: AppColors.foreground);
   static TextStyle get bodyMedium => GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w400, height: 1.5, color: AppColors.foreground);
   static TextStyle get bodySmall  => GoogleFonts.inter(fontSize: 12, fontWeight: FontWeight.w400, height: 1.5, color: AppColors.mutedForeground);
   static TextStyle get bodyMuted  => GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w400, height: 1.5, color: AppColors.mutedForeground);
 
-  // Labels y botones (font-weight-medium = 500)
   static TextStyle get label      => GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500, height: 1.5, color: AppColors.foreground);
   static TextStyle get labelSmall => GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w500, height: 1.5, color: AppColors.foreground);
   static TextStyle get button     => GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w500, height: 1.5, color: AppColors.foreground);
 
-  // Display (para stats y contadores grandes)
   static TextStyle get displayLarge => GoogleFonts.inter(fontSize: 30, fontWeight: FontWeight.w600, height: 1.2, color: AppColors.foreground);
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TEMA MATERIAL — ThemeData oscuro de Bound2Game
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Retorna el [ThemeData] oscuro configurado con los tokens de diseño Bound2Game.
+// Aquí junto todo para crear el tema oficial de la app. Configuro botones, barras y textos.
 ThemeData buildAppTheme() {
   final ColorScheme colorScheme = ColorScheme(
     brightness: Brightness.dark,
-    // Acento principal: Amarillo B2G
     primary:            AppColors.accent,
     onPrimary:          AppColors.accentForeground,
     primaryContainer:   AppColors.surface,
@@ -187,16 +139,13 @@ ThemeData buildAppTheme() {
     useMaterial3: true,
     brightness: Brightness.dark,
     colorScheme: colorScheme,
-    scaffoldBackgroundColor: AppColors.background, // Negro puro #000000
+    scaffoldBackgroundColor: AppColors.background,
 
     appBarTheme: AppBarTheme(
       backgroundColor: const Color(0xFF292929),
-      surfaceTintColor: Colors.transparent, // Evita cambio de color al hacer scroll
+      surfaceTintColor: Colors.transparent,
       foregroundColor: AppColors.foreground,
       elevation: 0,
-      scrolledUnderElevation: 8.0,
-      shadowColor: Colors.black.withValues(alpha: 0.6),
-      centerTitle: false,
       titleTextStyle: AppTextStyles.h3,
       systemOverlayStyle: SystemUiOverlayStyle.light,
       iconTheme: const IconThemeData(color: AppColors.foreground),
@@ -204,97 +153,28 @@ ThemeData buildAppTheme() {
 
     bottomNavigationBarTheme: BottomNavigationBarThemeData(
       backgroundColor: const Color(0xFF292929),
-      selectedItemColor: AppColors.accent,       // Ítem seleccionado: Amarillo
+      selectedItemColor: AppColors.accent,
       unselectedItemColor: AppColors.mutedForeground,
       type: BottomNavigationBarType.fixed,
       elevation: 12,
-      // Aplicamos sombra para mantener la coherencia de "deslizamiento"
-    ),
-
-    navigationBarTheme: NavigationBarThemeData(
-      backgroundColor: const Color(0xFF292929),
-      surfaceTintColor: Colors.transparent,
-      elevation: 12,
-      shadowColor: Colors.black.withValues(alpha: 0.6),
-      indicatorColor: AppColors.accent.withValues(alpha: 0.18), // Indicador amarillo suave
-      iconTheme: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) {
-          return const IconThemeData(color: AppColors.accent); // Ícono activo: Amarillo
-        }
-        return const IconThemeData(color: AppColors.mutedForeground);
-      }),
-      labelTextStyle: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.selected)) {
-          return AppTextStyles.labelSmall.copyWith(color: AppColors.accent);
-        }
-        return AppTextStyles.bodyMuted;
-      }),
-    ),
-
-    drawerTheme: const DrawerThemeData(
-      backgroundColor: AppColors.sidebar,
-      scrimColor: Colors.black54,
     ),
 
     cardTheme: CardThemeData(
       color: AppColors.card,
       elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: AppRadius.roundedLg,
-        side: const BorderSide(color: AppColors.border),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: AppRadius.roundedLg, side: const BorderSide(color: AppColors.border)),
       margin: const EdgeInsets.all(AppSpacing.sm),
     ),
 
     elevatedButtonTheme: ElevatedButtonThemeData(
       style: ElevatedButton.styleFrom(
-        backgroundColor: AppColors.accent,           // Botón principal: Amarillo
-        foregroundColor: AppColors.accentForeground,  // Texto: Negro (contraste AAA)
-        textStyle: AppTextStyles.button,
-        shape: RoundedRectangleBorder(borderRadius: AppRadius.roundedMd),
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-        elevation: 0,
-      ),
-    ),
-
-    outlinedButtonTheme: OutlinedButtonThemeData(
-      style: OutlinedButton.styleFrom(
-        foregroundColor: AppColors.foreground,
-        side: const BorderSide(color: AppColors.border),
+        backgroundColor: AppColors.accent,
+        foregroundColor: AppColors.accentForeground,
         textStyle: AppTextStyles.button,
         shape: RoundedRectangleBorder(borderRadius: AppRadius.roundedMd),
         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
       ),
     ),
-
-    textButtonTheme: TextButtonThemeData(
-      style: TextButton.styleFrom(
-        foregroundColor: AppColors.accent, // TextButton: Amarillo
-        textStyle: AppTextStyles.button,
-      ),
-    ),
-
-    inputDecorationTheme: InputDecorationTheme(
-      filled: true,
-      fillColor: AppColors.inputBackground,
-      hintStyle: AppTextStyles.bodyMedium.copyWith(color: AppColors.mutedForeground),
-      border: OutlineInputBorder(borderRadius: AppRadius.roundedMd, borderSide: const BorderSide(color: AppColors.border)),
-      enabledBorder: OutlineInputBorder(borderRadius: AppRadius.roundedMd, borderSide: const BorderSide(color: AppColors.border)),
-      focusedBorder: OutlineInputBorder(borderRadius: AppRadius.roundedMd, borderSide: const BorderSide(color: AppColors.accent, width: 2)), // Borde activo: Amarillo
-      contentPadding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
-    ),
-
-    chipTheme: ChipThemeData(
-      backgroundColor: AppColors.surface,
-      labelStyle: AppTextStyles.labelSmall,
-      side: const BorderSide(color: AppColors.border),
-      shape: RoundedRectangleBorder(borderRadius: AppRadius.roundedFull),
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
-    ),
-
-    dividerTheme: const DividerThemeData(color: AppColors.border, thickness: 1, space: 0),
-
-    iconTheme: const IconThemeData(color: AppColors.foreground, size: 24),
 
     textTheme: TextTheme(
       displayLarge:    AppTextStyles.displayLarge,
