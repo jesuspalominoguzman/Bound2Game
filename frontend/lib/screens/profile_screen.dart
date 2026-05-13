@@ -71,7 +71,6 @@ class ProfileScreenState extends State<ProfileScreen> {
       }
     } catch (_) {}
   }
-
   Future<List<ApiGame>> _loadLibrary(String userId) async {
     return await ApiService.getUserLibraryPreview(userId);
   }

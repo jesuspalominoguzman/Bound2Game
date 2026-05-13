@@ -82,9 +82,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         });
       }
     } catch (_) {}
-  }
-
-  Future<List<ApiGame>> _loadLibrary() async {
+  }  Future<List<ApiGame>> _loadLibrary() async {
     try {
       return await ApiService.getFriendLibrary(widget.user.id);
     } catch (e) {
