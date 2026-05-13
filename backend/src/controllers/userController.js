@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -164,20 +165,102 @@ const updatePcComponents = async (req, res) => {
 };
 
 /**
- * Obtener la lista de amigos del usuario autenticado
+ * Actualizar las plataformas (Steam, Epic, Xbox, Discord) del usuario autenticado.
  */
-const getUserFriends = async (req, res) => {
+const updatePlatforms = async (req, res) => {
     try {
         const userId = req.user.id;
-        const user = await User.findById(userId).populate('friends', 'username avatarUrl karma status');
-        
+        const { steamId, epicId, xboxId, discordId } = req.body;
+
+        const user = await User.findById(userId);
+
         if (!user) {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
 
+        if (steamId !== undefined) user.steamId = steamId;
+        if (epicId !== undefined) user.epicId = epicId;
+        if (xboxId !== undefined) user.xboxId = xboxId;
+        if (discordId !== undefined) user.discordId = discordId;
+
+        await user.save();
+
+        return res.status(200).json({
+            message: 'Plataformas actualizadas con éxito',
+            platforms: {
+                steamId: user.steamId,
+                epicId: user.epicId,
+                xboxId: user.xboxId,
+                discordId: user.discordId
+            }
+        });
+    } catch (error) {
+        console.error('Error en updatePlatforms:', error);
+        return res.status(500).json({ error: 'Error interno al actualizar las plataformas' });
+    }
+};
+
+/**
+ * Obtener la lista de amigos del usuario autenticado.
+ * Incluye populate anidado con los juegos recientes de cada amigo
+ * (hasta 5 títulos de su UserLibrary) para mostrarlos en la pantalla Social.
+ */
+const getUserFriends = async (req, res) => {
+    try {
+        const userId = req.user.id;
+        const UserLibrary = require('../models/UserLibrary');
+
+        // 1. Traer el usuario con sus amigos populados (datos básicos)
+        const user = await User.findById(userId)
+            .populate('friends', 'username avatarUrl karma reputation bio isOnline');
+
+        if (!user) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        // 2. Para cada amigo, traer sus juegos recientes (populate anidado manual,
+        //    más eficiente que virtual populate para este caso)
+        const friendsWithGames = await Promise.all(
+            user.friends.map(async (friend) => {
+                const libraryEntries = await UserLibrary.find({ userId: friend._id })
+                    .populate('gameId', 'title imageUrl steamAppID')
+                    .sort({ addedAt: -1 })
+                    .limit(5)
+                    .lean();
+
+                // Extraer títulos reales
+                const recentGames = libraryEntries.map((entry) => {
+                    return entry.gameId?.title
+                        ?? entry.gameDetails?.name
+                        ?? 'Juego desconocido';
+                });
+
+                // Extraer URLs de portada reales
+                const recentGameCovers = libraryEntries.map((entry) => {
+                    if (entry.gameId?.imageUrl) return entry.gameId.imageUrl;
+                    if (entry.gameId?.steamAppID) {
+                        return `https://cdn.cloudflare.steamstatic.com/steam/apps/${entry.gameId.steamAppID}/library_600x900.jpg`;
+                    }
+                    return '';
+                }).filter(url => url !== '');
+
+                return {
+                    _id:              friend._id,
+                    username:         friend.username,
+                    avatarUrl:        friend.avatarUrl,
+                    karma:            friend.karma,
+                    reputation:       friend.reputation,
+                    bio:              friend.bio,
+                    isOnline:         friend.isOnline ?? false,
+                    recentGames,
+                    recentGameCovers
+                };
+            })
+        );
+
         return res.status(200).json({
             message: 'Amigos recuperados con éxito',
-            friends: user.friends
+            friends: friendsWithGames
         });
     } catch (error) {
         console.error('Error en getUserFriends:', error);
@@ -197,7 +280,7 @@ const searchUsers = async (req, res) => {
 
         // Buscar usuarios ignorando mayúsculas/minúsculas usando expresión regular
         const users = await User.find({ username: { $regex: q, $options: 'i' } })
-                                .select('username avatarUrl karma bio')
+                                .select('username avatarUrl karma bio isOnline')
                                 .limit(20);
 
         return res.status(200).json({
@@ -210,11 +293,362 @@ const searchUsers = async (req, res) => {
     }
 };
 
+/**
+ * Enviar o aceptar una solicitud de amistad.
+ *
+ * Lógica:
+ *   - Si el emisor (req.user.id) ya está en pendingRequests del receptor → ACEPTAR
+ *     (mover ambos a friends[], limpiar pendingRequests).
+ *   - Si ya son amigos → 409 Conflict.
+ *   - En otro caso → ENVIAR (añadir emisor al pendingRequests del receptor).
+ */
+const manageFriendRequest = async (req, res) => {
+    try {
+        const senderId     = req.user.id;
+        const { targetId } = req.body;
+
+        // ── Validación temprana ────────────────────────────────────────────────
+        if (!targetId || typeof targetId !== 'string' || targetId.trim() === '') {
+            return res.status(400).json({ error: 'Debes proporcionar targetId' });
+        }
+        if (!mongoose.Types.ObjectId.isValid(targetId)) {
+            return res.status(400).json({ error: 'El targetId no es un ObjectId válido' });
+        }
+        if (senderId === targetId) {
+            return res.status(400).json({ error: 'No puedes enviarte una solicitud a ti mismo' });
+        }
+
+        const [sender, receiver] = await Promise.all([
+            User.findById(senderId),
+            User.findById(targetId)
+        ]);
+
+        if (!sender || !receiver) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        // ── ¿Ya son amigos? ─────────────────────────────────────────────────
+        const alreadyFriends = sender.friends.map(id => id.toString()).includes(targetId);
+        if (alreadyFriends) {
+            return res.status(409).json({ error: 'Ya sois amigos', status: 'friends' });
+        }
+
+        // ── ¿El TARGET está en los pendingRequests del EMISOR? → ACEPTAR ────
+        // Esto significa: el target nos envió una solicitud y ahora la aceptamos.
+        // Ejemplo: A envió a B (B.pending=[A]). B acepta: sender=B,target=A.
+        // Check: ¿está A en B.pendingRequests? Sí → aceptar.
+        const hasPendingFromTarget = sender.pendingRequests
+            .map(id => id.toString()).includes(targetId);
+
+        if (hasPendingFromTarget) {
+            // Mover a friends[], limpiar pendingRequests del emisor (que estaba esperando)
+            sender.friends.push(targetId);
+            receiver.friends.push(senderId);
+            sender.pendingRequests = sender.pendingRequests.filter(
+                id => id.toString() !== targetId
+            );
+            await Promise.all([sender.save(), receiver.save()]);
+
+            // Emitir evento de socket si el receptor está conectado
+            const io = req.app.get('io');
+            if (io) {
+                io.of('/chat').to(`user_${targetId}`).emit('friendRequest', {
+                    username: sender.username,
+                    userId: senderId,
+                    type: 'accepted'
+                });
+            }
+
+            return res.status(200).json({
+                message: '¡Solicitud aceptada! Ahora sois amigos.',
+                status: 'accepted'
+            });
+        }
+
+        // ── ¿El emisor ya envió una solicitud antes? (está en pending del receptor) ─
+        const alreadySent = receiver.pendingRequests
+            .map(id => id.toString()).includes(senderId);
+        if (alreadySent) {
+            return res.status(409).json({ error: 'Solicitud ya enviada', status: 'pending' });
+        }
+
+        // ── ENVIAR: añadir senderId a los pendingRequests del receiver ────────
+        receiver.pendingRequests.push(senderId);
+        await receiver.save();
+
+        // Emitir evento de socket si el receptor está conectado
+        const io = req.app.get('io');
+        if (io) {
+            io.of('/chat').to(`user_${targetId}`).emit('friendRequest', {
+                username: sender.username,
+                userId: senderId,
+                type: 'request'
+            });
+        }
+
+        return res.status(200).json({
+            message: 'Solicitud de amistad enviada correctamente.',
+            status: 'pending'
+        });
+    } catch (error) {
+        console.error('Error en manageFriendRequest:', error);
+        return res.status(500).json({ error: 'Error interno al gestionar la solicitud de amistad' });
+    }
+};
+
+/**
+ * Obtener la biblioteca pública de un amigo.
+ * Requiere que el usuario autenticado y el dueño de la biblioteca sean amigos.
+ */
+const getFriendLibrary = async (req, res) => {
+    try {
+        const requesterId = req.user.id;
+        const { userId }  = req.params;
+
+        // Verificar que son amigos antes de mostrar la biblioteca
+        const requester = await User.findById(requesterId).select('friends');
+        if (!requester) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        const areFriends = requester.friends.map(id => id.toString()).includes(userId);
+        if (!areFriends) {
+            return res.status(403).json({ error: 'Solo puedes ver la biblioteca de tus amigos' });
+        }
+
+        // Importar UserLibrary aquí para no crear dependencia circular en el módulo
+        const UserLibrary = require('../models/UserLibrary');
+        const entries = await UserLibrary.find({ userId })
+            .populate('gameId', 'title imageUrl steamAppID hltb')
+            .sort({ addedAt: -1 });
+
+        return res.status(200).json({
+            message: 'Biblioteca recuperada con éxito',
+            library: entries
+        });
+    } catch (error) {
+        console.error('Error en getFriendLibrary:', error);
+        return res.status(500).json({ error: 'Error interno al recuperar la biblioteca del amigo' });
+    }
+};
+
+/**
+ * Vista previa de la biblioteca de cualquier usuario.
+ * NO requiere amistad — permite ver los juegos de alguien antes de añadirlo.
+ * Solo devuelve datos no sensibles (títulos e imagen de portada).
+ */
+const getUserLibraryPreview = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(400).json({ error: 'userId no válido' });
+        }
+
+        const UserLibrary = require('../models/UserLibrary');
+        const entries = await UserLibrary.find({ userId })
+            .populate('gameId', 'title imageUrl steamAppID hltb')
+            .sort({ addedAt: -1 })
+            .limit(8);
+
+        return res.status(200).json({
+            message: 'Vista previa de biblioteca',
+            library: entries
+        });
+    } catch (error) {
+        console.error('Error en getUserLibraryPreview:', error);
+        return res.status(500).json({ error: 'Error interno al recuperar la vista previa' });
+    }
+};
+
+/**
+ * GET /api/users/pending-requests
+ * Devuelve la lista de usuarios que han enviado una solicitud al usuario autenticado.
+ * (i.e., usuarios cuyos IDs están en req.user.pendingRequests)
+ */
+const getPendingRequests = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id)
+            .populate('pendingRequests', 'username avatarUrl karma bio');
+
+        if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+        return res.status(200).json({
+            message: 'Solicitudes pendientes',
+            pendingRequests: user.pendingRequests
+        });
+    } catch (error) {
+        console.error('Error en getPendingRequests:', error);
+        return res.status(500).json({ error: 'Error interno al obtener solicitudes' });
+    }
+};
+
+/**
+ * GET /api/users/:userId/profile-public
+ * Devuelve la información pública de un usuario (para mostrar en su pantalla de perfil).
+ */
+const getUserProfilePublic = async (req, res) => {
+    try {
+        const { userId } = req.params;
+
+        if (!mongoose.Types.ObjectId.isValid(userId)) {
+            return res.status(400).json({ error: 'userId no válido' });
+        }
+
+        const targetUser = await User.findById(userId)
+            .select('username avatarUrl bio karma reputation steamId epicId xboxId discordId pcComponents isOnline friends likedBy dislikedBy')
+            .lean();
+
+        if (!targetUser) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        const friendsCount = targetUser.friends ? targetUser.friends.length : 0;
+        
+        let userRating = 'none';
+        if (targetUser.likedBy && targetUser.likedBy.map(id => id.toString()).includes(req.user.id)) {
+            userRating = 'like';
+        } else if (targetUser.dislikedBy && targetUser.dislikedBy.map(id => id.toString()).includes(req.user.id)) {
+            userRating = 'dislike';
+        }
+
+        return res.status(200).json({
+            message: 'Perfil público recuperado con éxito',
+            profile: {
+                id: targetUser._id,
+                username: targetUser.username,
+                avatarUrl: targetUser.avatarUrl,
+                bio: targetUser.bio,
+                karma: targetUser.karma,
+                reputation: targetUser.reputation,
+                steamId: targetUser.steamId,
+                epicId: targetUser.epicId,
+                xboxId: targetUser.xboxId,
+                discordId: targetUser.discordId,
+                pcComponents: targetUser.pcComponents,
+                isOnline: targetUser.isOnline,
+                friendsCount: friendsCount,
+                userRating: userRating
+            }
+        });
+    } catch (error) {
+        console.error('Error en getUserProfilePublic:', error);
+        return res.status(500).json({ error: 'Error interno al recuperar el perfil público' });
+    }
+};
+
+/**
+ * PUT /api/users/me/fcm-token
+ * Actualiza el token de Firebase Cloud Messaging del usuario actual.
+ */
+const updateFcmToken = async (req, res) => {
+    try {
+        const { fcmToken } = req.body;
+
+        if (!fcmToken) {
+            return res.status(400).json({ error: 'Token FCM no proporcionado' });
+        }
+
+        const user = await User.findById(req.user.id);
+        if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+        user.fcmToken = fcmToken;
+        await user.save();
+
+        return res.status(200).json({ message: 'Token FCM actualizado correctamente' });
+    } catch (error) {
+        console.error('Error en updateFcmToken:', error);
+        return res.status(500).json({ error: 'Error interno al actualizar el token' });
+    }
+};
+
+/**
+ * POST /api/users/:userId/rate
+ * Permite a un usuario dar like o dislike a otro perfil.
+ */
+const rateUser = async (req, res) => {
+    try {
+        const { userId } = req.params;
+        const { action } = req.body; // 'like' o 'dislike'
+        const raterId = req.user.id;
+
+        if (userId === raterId) {
+            return res.status(400).json({ error: 'No puedes valorarte a ti mismo' });
+        }
+
+        if (!['like', 'dislike'].includes(action)) {
+            return res.status(400).json({ error: 'Acción inválida. Debe ser like o dislike' });
+        }
+
+        const targetUser = await User.findById(userId);
+        if (!targetUser) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        // Inicializar arreglos si no existen
+        if (!targetUser.likedBy) targetUser.likedBy = [];
+        if (!targetUser.dislikedBy) targetUser.dislikedBy = [];
+
+        const hasLiked = targetUser.likedBy.map(id => id.toString()).includes(raterId);
+        const hasDisliked = targetUser.dislikedBy.map(id => id.toString()).includes(raterId);
+
+        let newRating = 'none';
+
+        if (action === 'like') {
+            if (hasLiked) {
+                // Toggle off
+                targetUser.likedBy = targetUser.likedBy.filter(id => id.toString() !== raterId);
+            } else {
+                // Add like
+                targetUser.likedBy.push(raterId);
+                newRating = 'like';
+                if (hasDisliked) {
+                    targetUser.dislikedBy = targetUser.dislikedBy.filter(id => id.toString() !== raterId);
+                }
+            }
+        } else if (action === 'dislike') {
+            if (hasDisliked) {
+                // Toggle off
+                targetUser.dislikedBy = targetUser.dislikedBy.filter(id => id.toString() !== raterId);
+            } else {
+                // Add dislike
+                targetUser.dislikedBy.push(raterId);
+                newRating = 'dislike';
+                if (hasLiked) {
+                    targetUser.likedBy = targetUser.likedBy.filter(id => id.toString() !== raterId);
+                }
+            }
+        }
+
+        // Recalcular karma
+        targetUser.karma = targetUser.likedBy.length - targetUser.dislikedBy.length;
+
+        await targetUser.save();
+
+        return res.status(200).json({
+            message: 'Valoración actualizada',
+            karma: targetUser.karma,
+            userRating: newRating
+        });
+    } catch (error) {
+        console.error('Error en rateUser:', error);
+        return res.status(500).json({ error: 'Error interno al valorar al usuario' });
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
     getProfile,
     updatePcComponents,
     getUserFriends,
-    searchUsers
+    searchUsers,
+    manageFriendRequest,
+    getFriendLibrary,
+    getUserLibraryPreview,
+    getPendingRequests,
+    getUserProfilePublic,
+    updatePlatforms,
+    updateFcmToken,
+    rateUser
 };

@@ -106,16 +106,22 @@ class LibraryScreenState extends State<LibraryScreen>
   // ── Géneros disponibles (derivado de los datos reales) ──────────────────────
   List<String> get _availableGenres => _allGames
       .map((g) => g.genre)
+      .where((g) => g.isNotEmpty && g != 'Varios' && g != 'Sin género')
       .toSet()
       .toList()
     ..sort();
 
   // ── Juegos filtrados (computed) ────────────────────────────────────────────
   List<Game> get _filteredGames {
-    var result = _allGames.where((game) {
-      return _searchQuery.isEmpty ||
-          game.title.toLowerCase().contains(_searchQuery);
-    }).toList();
+    // 1. Aplicamos filtros avanzados (Plataforma, Género, Estado, etc.)
+    var result = _filters.apply(_allGames);
+
+    // 2. Filtro secundario por texto de búsqueda
+    if (_searchQuery.isNotEmpty) {
+      result = result.where((game) {
+        return game.title.toLowerCase().contains(_searchQuery);
+      }).toList();
+    }
 
     return result;
   }

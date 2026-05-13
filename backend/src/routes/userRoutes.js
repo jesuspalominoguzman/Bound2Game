@@ -27,11 +27,23 @@ router.get('/me', authMiddleware, userController.getProfile);
 // GET /api/users/friends (Lista de amigos)
 router.get('/friends', authMiddleware, userController.getUserFriends);
 
+// GET /api/users/pending-requests (Solicitudes de amistad recibidas)
+router.get('/pending-requests', authMiddleware, userController.getPendingRequests);
+
 // GET /api/users/search?q=name (Buscar nuevos amigos)
 router.get('/search', authMiddleware, userController.searchUsers);
 
+// POST /api/users/friend-request (Enviar o aceptar solicitud de amistad)
+router.post('/friend-request', authMiddleware, userController.manageFriendRequest);
+
 // PUT /api/users/me/pc-components (Ruta Protegida)
 router.put('/me/pc-components', authMiddleware, userController.updatePcComponents);
+
+// PUT /api/users/me/platforms (Ruta Protegida)
+router.put('/me/platforms', authMiddleware, userController.updatePlatforms);
+
+// PUT /api/users/me/fcm-token (Ruta Protegida)
+router.put('/me/fcm-token', authMiddleware, userController.updateFcmToken);
 
 // ── Biblioteca del usuario ─────────────────────────────────────────────────────
 // GET    /api/users/:userId/library          → obtener todos los juegos
@@ -47,5 +59,19 @@ router.get   ('/:userId/library/:entryId',    authMiddleware, verifyOwnership, l
 router.patch ('/:userId/library/:entryId',    authMiddleware, verifyOwnership, libraryController.updateEntry);
 router.delete('/:userId/library/:entryId',    authMiddleware, verifyOwnership, libraryController.removeGame);
 router.get   ('/:userId/stats',               authMiddleware, verifyOwnership, libraryController.getStats);
+
+// GET /api/users/:userId/library-public — Biblioteca visible para amigos del usuario
+// Sin verifyOwnership: el controlador verifica internamente la relación de amistad
+router.get   ('/:userId/library-public',      authMiddleware, userController.getFriendLibrary);
+
+// GET /api/users/:userId/library-preview — Vista previa pública (sin requerir amistad)
+// Permite ver los juegos de un usuario antes de añadirlo como amigo
+router.get   ('/:userId/library-preview',     authMiddleware, userController.getUserLibraryPreview);
+
+// GET /api/users/:userId/profile-public — Info pública del perfil
+router.get   ('/:userId/profile-public',      authMiddleware, userController.getUserProfilePublic);
+
+// POST /api/users/:userId/rate — Valorar (like/dislike) a un usuario
+router.post  ('/:userId/rate',                authMiddleware, userController.rateUser);
 
 module.exports = router;

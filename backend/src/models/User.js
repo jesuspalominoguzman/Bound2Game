@@ -30,7 +30,27 @@ const userSchema = new mongoose.Schema({
         type: Number,
         default: 0
     },
+    likedBy: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
+    dislikedBy: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
     steamId: {
+        type: String,
+        default: ''
+    },
+    epicId: {
+        type: String,
+        default: ''
+    },
+    xboxId: {
+        type: String,
+        default: ''
+    },
+    discordId: {
         type: String,
         default: ''
     },
@@ -66,7 +86,21 @@ const userSchema = new mongoose.Schema({
     friends: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
-    }]
+    }],
+    // IDs de usuarios que han enviado una solicitud de amistad y aún no ha sido aceptada
+    pendingRequests: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
+    // Estado de presencia en tiempo real — true mientras la app está en primer plano
+    isOnline: {
+        type: Boolean,
+        default: false
+    },
+    fcmToken: {
+        type: String,
+        default: ''
+    }
 }, {
     timestamps: true
 });

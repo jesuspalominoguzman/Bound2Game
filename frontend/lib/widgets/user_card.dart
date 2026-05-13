@@ -7,8 +7,9 @@
 
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
-import '../screens/profile_screen.dart';
+import '../screens/user_profile_screen.dart';
 import '../screens/chat_screen.dart';
+import '../services/api_service.dart';
 
 // ── Constantes de color ───────────────────────────────────────────────────────
 const _bgCard    = Color(0xFF1A1A1A); // Nueva directriz
@@ -38,27 +39,48 @@ class _UserCardState extends State<UserCard> {
   bool _isPressed = false;
   late _FriendState _state;
 
+  bool _actionLoading = false;
+
   @override
   void initState() {
     super.initState();
-    // Inyectar estado inicial de amistad
     _state = widget.isFriend ? _FriendState.friends : _FriendState.none;
   }
 
-  void _handleAction() {
-    setState(() {
-      if (_state == _FriendState.none) {
-        _state = _FriendState.pending;
-      } else if (_state == _FriendState.pending) {
-        _state = _FriendState.none;
-      } else if (_state == _FriendState.friends) {
-        Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => ChatScreen(user: widget.user),
+  Future<void> _handleAction() async {
+    if (_state == _FriendState.friends) {
+      // Si es amigo, el chat se abre desde el ícono
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => ChatScreen(user: widget.user)),
+      );
+      return;
+    }
+    if (_state == _FriendState.pending || _actionLoading) return;
+
+    setState(() => _actionLoading = true);
+    try {
+      final result = await ApiService.sendFriendRequest(widget.user.id);
+      if (mounted) {
+        setState(() {
+          if (result == 'accepted') {
+            _state = _FriendState.friends;
+          } else if (result == 'pending') {
+            _state = _FriendState.pending;
+          }
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al enviar solicitud: $e'),
+            backgroundColor: const Color(0xFF1A1A1A),
           ),
         );
       }
-    });
+    } finally {
+      if (mounted) setState(() => _actionLoading = false);
+    }
   }
 
   @override
@@ -69,10 +91,7 @@ class _UserCardState extends State<UserCard> {
         setState(() => _isPressed = false);
         Navigator.of(context).push(
           MaterialPageRoute(
-            builder: (_) => ProfileScreen(
-              user: widget.user,
-              isOwnProfile: false,
-            ),
+            builder: (_) => UserProfileScreen(user: widget.user),
           ),
         );
       },
@@ -123,7 +142,7 @@ class _UserCardState extends State<UserCard> {
                       ),
                       const SizedBox(width: 6),
                       Text(
-                        widget.user.isOnline ? 'Online' : 'Offline',
+                        widget.user.isOnline ? 'En Línea' : 'Desconectado',
                         style: TextStyle(
                           fontSize: 12,
                           color: widget.user.isOnline ? _green : _textSub,
@@ -133,34 +152,47 @@ class _UserCardState extends State<UserCard> {
                     ],
                   ),
                   const SizedBox(height: 4),
-                  
-                  // Juegos en común (temporalmente oculto al no existir en bd real)
-                  Text(
-                    '${widget.user.friends.length} amigos',
-                    style: const TextStyle(
-                      fontSize: 11,
-                      color: _textSub,
+
+                  // Juegos recientes del amigo (datos reales del backend)
+                  if (widget.user.recentGames.isEmpty)
+                    const Text(
+                      'Sin juegos en biblioteca',
+                      style: TextStyle(fontSize: 11, color: _textSub),
+                    )
+                  else
+                    Text(
+                      widget.user.recentGames.take(2).join(', '),
+                      style: const TextStyle(fontSize: 11, color: _textSub),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                  ),
                 ],
               ),
             ),
 
             // Botón de acción (Máquina de estados)
-            IconButton(
-              onPressed: _handleAction,
-              icon: _buildActionIcon(),
-              color: _state == _FriendState.none
-                  ? _textMain
-                  : _state == _FriendState.pending
-                      ? _yellow
-                      : _yellow, // Usar amarillo como acento para acciones completadas
-              style: IconButton.styleFrom(
-                backgroundColor: _state == _FriendState.friends 
-                    ? _yellow.withValues(alpha: 0.1) 
-                    : const Color(0xFF292929),
-              ),
-            ),
+            _actionLoading
+                ? const SizedBox(
+                    width: 40, height: 40,
+                    child: Padding(
+                      padding: EdgeInsets.all(10),
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF00E5FF)),
+                    ),
+                  )
+                : IconButton(
+                    onPressed: _handleAction,
+                    icon: _buildActionIcon(),
+                    color: _state == _FriendState.none
+                        ? _textMain
+                        : _state == _FriendState.pending
+                            ? _yellow
+                            : _yellow,
+                    style: IconButton.styleFrom(
+                      backgroundColor: _state == _FriendState.friends
+                          ? _yellow.withValues(alpha: 0.1)
+                          : const Color(0xFF292929),
+                    ),
+                  ),
           ],
         ),
       ),

@@ -43,11 +43,18 @@ app.get('/', (req, res) => {
 const server = http.createServer(app);  // ← AÑADIDO (Fase III)
 const io = new Server(server, {         // ← AÑADIDO (Fase III)
     cors: { origin: '*', methods: ['GET', 'POST'] },
+    // Configuración agresiva de heartbeat (hilo de comprobación de conexión)
+    // El servidor hace "ping" cada 5s y si no hay respuesta en 5s, emite 'disconnect'
+    pingInterval: 5000,
+    pingTimeout: 5000,
 });
+
+// Hacer accesible la instancia de io en la app de express
+app.set('io', io);
 
 // Inicializar namespace de chat
 chatSocket(io);                         // ← AÑADIDO (Fase III)
 
-server.listen(PORT, () => {             // ← AÑADIDO (Fase III — reemplaza app.listen)
-    console.log(`🚀 Servidor corriendo en el puerto ${PORT}`);
+server.listen(PORT, '0.0.0.0', () => {             // ← MODIFICADO para dispositivos físicos
+    console.log(`🚀 Servidor corriendo en http://0.0.0.0:${PORT}`);
 });
