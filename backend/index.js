@@ -21,7 +21,7 @@ app.use(express.json());
 
 // Puerto y URI de conexión (Preparado para funcionar con Docker)
 const PORT = process.env.PORT || 3000;
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://database:27017/bound2game';
+const MONGO_URI = process.env.MONGO_URI || 'mongodb+srv://Jpalominoo:Bound2Game@cluster0.ptmyjlc.mongodb.net/bound2game?retryWrites=true&w=majority&appName=Cluster0';
 
 // Conexión a MongoDB (Ahora ACTIVADA)
 mongoose.connect(MONGO_URI)
