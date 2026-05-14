@@ -129,20 +129,33 @@ class UserSearchResult {
   final String  username;
   final String? avatarUrl;
   final int     karma;
+  final String? friendStatus; // 'none', 'pending', 'accepted', 'friends'
 
   const UserSearchResult({
     required this.id,
     required this.username,
     this.avatarUrl,
     this.karma = 0,
+    this.friendStatus,
   });
 
   factory UserSearchResult.fromJson(Map<String, dynamic> j) => UserSearchResult(
-    id:        j['_id']?.toString() ?? j['id']?.toString() ?? '',
-    username:  j['username']?.toString() ?? '',
-    avatarUrl: j['avatarUrl']?.toString(),
-    karma:     (j['karma'] as num?)?.toInt() ?? 0,
+    id:           j['_id']?.toString() ?? j['id']?.toString() ?? '',
+    username:     j['username']?.toString() ?? '',
+    avatarUrl:    j['avatarUrl']?.toString(),
+    karma:        (j['karma'] as num?)?.toInt() ?? 0,
+    friendStatus: j['friendStatus']?.toString(),
   );
+
+  UserSearchResult copyWith({String? friendStatus}) {
+    return UserSearchResult(
+      id: id,
+      username: username,
+      avatarUrl: avatarUrl,
+      karma: karma,
+      friendStatus: friendStatus ?? this.friendStatus,
+    );
+  }
 }
 
 // Para mostrar en el perfil cuántos juegos tenemos en total, cuántos hemos terminado, etc.

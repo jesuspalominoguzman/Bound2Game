@@ -23,6 +23,7 @@ class User {
   final String? discordId;
   final int friendsCount;
   final String? userRating; // Si nos cae bien (like), mal (dislike) o ni fu ni fa.
+  final String? friendStatus; // 'none', 'pending', 'friends'
 
   const User({
     required this.id,
@@ -42,6 +43,7 @@ class User {
     this.discordId,
     this.friendsCount = 0,
     this.userRating,
+    this.friendStatus,
   });
 
   factory User.fromJson(Map<String, dynamic> json) {
@@ -79,6 +81,7 @@ class User {
       discordId: json['discordId']?.toString(),
       friendsCount: (json['friendsCount'] as num?)?.toInt() ?? friendsList.length,
       userRating: json['userRating']?.toString(),
+      friendStatus: json['friendStatus']?.toString(),
     );
   }
 
@@ -115,6 +118,7 @@ class User {
     Map<String, dynamic>? pcComponents,
     String? userRating,
     int? karma,
+    String? friendStatus,
   }) {
     return User(
       id: id,
@@ -134,6 +138,7 @@ class User {
       discordId: discordId ?? this.discordId,
       friendsCount: friendsCount ?? this.friendsCount,
       userRating: userRating ?? this.userRating,
+      friendStatus: friendStatus ?? this.friendStatus,
     );
   }
 }

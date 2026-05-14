@@ -56,8 +56,6 @@ class _GameLibraryCardState extends State<GameLibraryCard>
               fit: StackFit.expand,
               children: [
                 _CoverImage(coverUrl: widget.game.cover),
-                // El puntito de requisitos (verde, amarillo o rojo) solo para PC.
-                if (widget.game.platform.isPc) Positioned(top: 8, right: 8, child: PcReqDot(pcReq: widget.game.pcReq)),
                 // La etiqueta de estado (Jugando, Completado...).
                 Positioned(top: 8, left: 8, child: _StatusChip(status: widget.game.status)),
                 Positioned(bottom: 0, left: 0, right: 0, child: _CardFooter(game: widget.game)),

@@ -94,7 +94,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
 
       if (mounted) {
         setState(() {
-          _fullGame = Game(id: widget.baseGame.id, entryId: actualEntryId, title: widget.baseGame.title, platform: widget.baseGame.platform, genre: apiGame.genres.isNotEmpty ? apiGame.genres.first : widget.baseGame.genre, playtime: apiGame.userPlaytime ?? widget.baseGame.playtime, status: widget.baseGame.status, cover: widget.baseGame.cover, hasCosmetics: widget.baseGame.hasCosmetics, pcReq: PcReq.fromString(compStatus), price: double.tryParse(apiGame.currentPrice ?? '0') ?? widget.baseGame.price, year: apiGame.releaseYear ?? widget.baseGame.year, rentability: apiGame.rentability, metacritic: apiGame.metacritic, esrbRating: apiGame.esrbRating, genres: apiGame.genres.isNotEmpty ? apiGame.genres : widget.baseGame.genres, hltb: HltbTimes(main: apiGame.hltbMainStory?.round(), completionist: apiGame.hltbCompletionist?.round()), pcSpecs: widget.baseGame.pcSpecs, pcRequirements: apiGame.pcRequirements ?? widget.baseGame.pcRequirements);
+          _fullGame = Game(id: widget.baseGame.id, entryId: actualEntryId, title: widget.baseGame.title, platform: Platform.fromString(apiGame.platform), genre: apiGame.genres.isNotEmpty ? apiGame.genres.first : widget.baseGame.genre, playtime: apiGame.userPlaytime ?? widget.baseGame.playtime, status: widget.baseGame.status, cover: widget.baseGame.cover, hasCosmetics: widget.baseGame.hasCosmetics, pcReq: PcReq.fromString(compStatus), price: double.tryParse(apiGame.currentPrice ?? '0') ?? widget.baseGame.price, year: apiGame.releaseYear ?? widget.baseGame.year, rentability: apiGame.rentability, metacritic: apiGame.metacritic, esrbRating: apiGame.esrbRating, genres: apiGame.genres.isNotEmpty ? apiGame.genres : widget.baseGame.genres, hltb: HltbTimes(main: apiGame.hltbMainStory?.round(), completionist: apiGame.hltbCompletionist?.round()), pcSpecs: widget.baseGame.pcSpecs, pcRequirements: apiGame.pcRequirements ?? widget.baseGame.pcRequirements);
           _isLoading = false;
         });
       }
@@ -146,14 +146,68 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 100),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                SizedBox(width: double.infinity, height: 48, child: ElevatedButton.icon(icon: Icon(_isOwned ? Icons.library_add_check_rounded : Icons.add_circle_outline_rounded), label: Text(_isOwned ? 'En Biblioteca (Click para quitar)' : 'Añadir a Biblioteca', style: const TextStyle(fontWeight: FontWeight.bold)), style: ElevatedButton.styleFrom(backgroundColor: _isOwned ? _green.withValues(alpha: 0.15) : _yellow, foregroundColor: _isOwned ? _green : Colors.black, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: _isOwned ? _green.withValues(alpha: 0.5) : Colors.transparent))), onPressed: _isTogglingLibrary ? null : _toggleLibrary)),
+                // Botón de biblioteca
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    icon: _isTogglingLibrary
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                      : Icon(_isOwned ? Icons.library_add_check_rounded : Icons.add_circle_outline_rounded),
+                    label: Text(_isOwned ? 'En Biblioteca (Click para quitar)' : 'Añadir a Biblioteca', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: _isOwned ? _green.withValues(alpha: 0.15) : _yellow,
+                      foregroundColor: _isOwned ? _green : Colors.black,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: BorderSide(color: _isOwned ? _green.withValues(alpha: 0.5) : Colors.transparent)),
+                      elevation: 0,
+                    ),
+                    onPressed: _isTogglingLibrary ? null : _toggleLibrary,
+                  ),
+                ),
+
+                // Botón Editar Detalles (solo si es dueño)
+                if (_isOwned) ...[
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton.icon(
+                      icon: const Icon(Icons.edit_note_rounded),
+                      label: const Text('Editar Detalles', style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _bgCard,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12), side: const BorderSide(color: _border)),
+                        elevation: 0,
+                      ),
+                      onPressed: _showEditDialog,
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 24),
+
+                // Módulo ROI
                 _RoiModule(game: game),
                 const SizedBox(height: 16),
-                if (game.platform.isPc) ...[_PcReqModule(game: game), const SizedBox(height: 16)],
-                if (game.hltb != null) ...[_HltbModule(game: game), const SizedBox(height: 16)],
+
+                // Módulo Requisitos PC
+                if (game.platform.isPc) ...[
+                  _PcReqModule(game: game),
+                  const SizedBox(height: 16)
+                ],
+
+                // Módulo HLTB
+                if (game.hltb != null) ...[
+                  _HltbModule(game: game),
+                  const SizedBox(height: 16)
+                ],
+
+                // Comparador de Precios
                 _PriceCompareModule(game: game, deals: _deals),
                 const SizedBox(height: 16),
+
+                // Ficha Técnica General
                 _InfoModule(game: game),
               ]),
             ),
@@ -162,20 +216,164 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
       ),
     );
   }
+
+  // Lógica para editar la entrada de la biblioteca (estado y horas)
+  Future<void> _showEditDialog() async {
+    final user = await AuthService.getCurrentUser();
+    if (user == null) return;
+    final targetId = _addedEntryId ?? widget.entryId;
+    if (targetId == null) return;
+
+    String selectedStatus = _fullGame?.status == GameStatus.playing ? 'Playing' :
+                            _fullGame?.status == GameStatus.completed ? 'Completed' :
+                            _fullGame?.status == GameStatus.abandoned ? 'Abandoned' : 'Backlog';
+    Platform selectedPlatform = _fullGame?.platform ?? Platform.steam;
+    final playtimeCtrl = TextEditingController(text: _fullGame?.playtime.toString() ?? '0');
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: _bgCard,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: _border)),
+          title: const Text('Editar Entrada', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Estado', style: TextStyle(color: _textSub, fontSize: 12)),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(color: _bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: _border)),
+                child: DropdownButton<String>(
+                  value: selectedStatus,
+                  dropdownColor: _bgCard,
+                  isExpanded: true,
+                  underline: const SizedBox(),
+                  style: const TextStyle(color: Colors.white),
+                  items: [
+                    {'val': 'Backlog', 'label': 'Pendiente'},
+                    {'val': 'Playing', 'label': 'Jugando'},
+                    {'val': 'Completed', 'label': 'Completado'},
+                    {'val': 'Abandoned', 'label': 'Abandonado'},
+                  ].map((s) => DropdownMenuItem(value: s['val'] as String, child: Text(s['label'] as String))).toList(),
+                  onChanged: (v) => setDialogState(() => selectedStatus = v!),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Plataforma', style: TextStyle(color: _textSub, fontSize: 12)),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(color: _bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: _border)),
+                child: DropdownButton<Platform>(
+                  value: selectedPlatform,
+                  dropdownColor: _bgCard,
+                  isExpanded: true,
+                  underline: const SizedBox(),
+                  style: const TextStyle(color: Colors.white),
+                  items: Platform.values.map((p) => DropdownMenuItem(value: p, child: Text(p.displayName))).toList(),
+                  onChanged: (v) => setDialogState(() => selectedPlatform = v!),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text('Horas jugadas', style: TextStyle(color: _textSub, fontSize: 12)),
+              const SizedBox(height: 8),
+              TextField(
+                controller: playtimeCtrl,
+                keyboardType: TextInputType.number,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(fillColor: _bg, filled: true, border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none)),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: _textSub))),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: _yellow, foregroundColor: Colors.black),
+              onPressed: () async {
+                await ApiService.updateLibraryEntry(
+                  userId: user.id, 
+                  entryId: targetId, 
+                  status: selectedStatus, 
+                  playtime: int.tryParse(playtimeCtrl.text) ?? 0,
+                  platform: selectedPlatform.displayName,
+                );
+                if (mounted) {
+                  Navigator.pop(ctx);
+                  _loadDetails();
+                }
+              },
+              child: const Text('Guardar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
-// Estos son los módulos que he separado para que el código no sea un lío de leer.
+// =============================================================================
+// SUB-WIDGETS Y MÓDULOS REFACTORIZADOS
+// =============================================================================
 
 class _GameSliverAppBar extends StatelessWidget {
   const _GameSliverAppBar({required this.game, required this.isInWishlist, required this.isOwned, required this.onWishlistToggle});
   final Game game; final bool isInWishlist, isOwned; final VoidCallback onWishlistToggle;
+
   @override
   Widget build(BuildContext context) {
     return SliverAppBar(
-      expandedHeight: 400, pinned: true, backgroundColor: _bg,
-      flexibleSpace: FlexibleSpaceBar(background: Stack(fit: StackFit.expand, children: [Image.network(game.cover, fit: BoxFit.cover), Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [Color(0xE6292929), Colors.transparent])))] )),
+      expandedHeight: 440, pinned: true, backgroundColor: _bg,
+      flexibleSpace: FlexibleSpaceBar(
+        background: Stack(
+          fit: StackFit.expand,
+          children: [
+            Image.network(game.cover, fit: BoxFit.cover),
+            Container(decoration: const BoxDecoration(gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: [Color(0xFF292929), Colors.transparent], stops: [0.0, 0.5]))),
+            
+            // Badges informativos sobre la carátula
+            Positioned(
+              bottom: 60, left: 16, right: 16,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      _HeaderChip(icon: Icons.computer_rounded, label: game.platform.displayName, color: game.platform.color),
+                      const SizedBox(width: 8),
+                      _HeaderChip(icon: Icons.check_circle_rounded, label: game.pcReq.config.label, color: game.pcReq.config.color),
+                      const SizedBox(width: 8),
+                      _HeaderChip(icon: Icons.access_time_filled_rounded, label: '${game.playtime}h jugadas', color: _cyan),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(game.title, style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900, letterSpacing: -0.5), maxLines: 2, overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
       leading: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white), onPressed: () => Navigator.pop(context)),
-      actions: [IconButton(icon: Icon(isInWishlist ? Icons.favorite_rounded : Icons.favorite_border_rounded, color: isInWishlist ? _red : Colors.white), onPressed: onWishlistToggle)],
+    );
+  }
+}
+
+class _HeaderChip extends StatelessWidget {
+  const _HeaderChip({required this.icon, required this.label, required this.color});
+  final IconData icon; final String label; final Color color;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.6), borderRadius: BorderRadius.circular(8), border: Border.all(color: color.withValues(alpha: 0.3))),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 4),
+        Text(label, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold)),
+      ]),
     );
   }
 }
@@ -186,14 +384,45 @@ class _RoiModule extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cph = _costPerHour(game.price, game.playtime);
-    return _ModuleCard(icon: Icons.analytics_rounded, iconColor: _cyan, title: 'Rentabilidad (ROI)', child: Column(children: [
-      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-        Text('${cph.toStringAsFixed(2)}€ / hora', style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: _roiColor(cph))),
-        Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), decoration: BoxDecoration(color: _roiColor(cph).withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)), child: Text(_roiLabel(cph), style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: _roiColor(cph)))),
-      ]),
-      const SizedBox(height: 8),
-      Text('Basado en ${game.playtime} horas jugadas y un coste de ${game.price}€.', style: const TextStyle(fontSize: 11, color: _textSub)),
-    ]));
+    final color = _roiColor(cph);
+    return _ModuleCard(
+      icon: Icons.analytics_rounded, iconColor: _purple, title: 'Rentabilidad Teórica (ROI)',
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _RoiStat(label: 'Precio', value: '${game.price.toStringAsFixed(0)}€', color: Colors.white),
+              _RoiStat(label: 'HLTB est.', value: '${game.hltb?.main ?? "--"}h', color: _cyan),
+              _RoiStat(label: 'Coste/hora', value: '${cph.toStringAsFixed(2)}€/h', color: color),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Container(
+            width: double.infinity, padding: const EdgeInsets.symmetric(vertical: 8),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8), border: Border.all(color: color.withValues(alpha: 0.2))),
+            child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+              Icon(Icons.trending_up_rounded, size: 14, color: color),
+              const SizedBox(width: 8),
+              Text(_roiLabel(cph).toUpperCase(), style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.w900, letterSpacing: 1)),
+            ]),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RoiStat extends StatelessWidget {
+  const _RoiStat({required this.label, required this.value, required this.color});
+  final String label, value; final Color color;
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      Text(value, style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: color)),
+      const SizedBox(height: 2),
+      Text(label, style: const TextStyle(fontSize: 9, color: _textSub)),
+    ]);
   }
 }
 
@@ -202,11 +431,25 @@ class _PcReqModule extends StatelessWidget {
   final Game game;
   @override
   Widget build(BuildContext context) {
-    return _ModuleCard(icon: Icons.computer_rounded, iconColor: _green, title: 'Compatibilidad PC', child: Column(children: [
-      Row(children: [PcReqDot(pcReq: game.pcReq), const SizedBox(width: 8), Text(game.pcReq.config.label, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: game.pcReq.config.color))]),
-      const SizedBox(height: 12),
-      // Aquí pondríamos las barritas de CPU, GPU y RAM...
-    ]));
+    return _ModuleCard(
+      icon: Icons.memory_rounded, iconColor: _green, title: 'Compatibilidad PC',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+            decoration: BoxDecoration(color: game.pcReq.config.background, borderRadius: BorderRadius.circular(8)),
+            child: Row(children: [PcReqDot(pcReq: game.pcReq), const SizedBox(width: 10), Text(game.pcReq.config.label, style: TextStyle(color: game.pcReq.config.color, fontWeight: FontWeight.bold))]),
+          ),
+          if (game.pcRequirements != null && game.pcRequirements!.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text('REQUISITOS MÍNIMOS:', style: TextStyle(color: _textSub, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+            const SizedBox(height: 8),
+            Html(data: game.pcRequirements!, style: {"body": Style(color: _textMain, fontSize: FontSize(11), margin: Margins.zero, padding: HtmlPaddings.zero)}),
+          ],
+        ],
+      ),
+    );
   }
 }
 
@@ -215,19 +458,35 @@ class _HltbModule extends StatelessWidget {
   final Game game;
   @override
   Widget build(BuildContext context) {
-    return _ModuleCard(icon: Icons.timer_rounded, iconColor: _purple, title: '¿Cuánto dura?', child: Row(mainAxisAlignment: MainAxisAlignment.spaceAround, children: [
-      _HltbStat(label: 'Historia', hours: '${game.hltb?.main ?? "--"}h'),
-      _HltbStat(label: 'Completo', hours: '${game.hltb?.completionist ?? "--"}h'),
-    ]));
+    final main = game.hltb?.main ?? 0;
+    final compl = game.hltb?.completionist ?? 0;
+    return _ModuleCard(
+      icon: Icons.speed_rounded, iconColor: _yellow, title: 'How Long To Beat',
+      child: Column(
+        children: [
+          _HltbBar(label: 'Historia Principal', hours: main, color: _cyan, total: compl > 0 ? compl : main),
+          const SizedBox(height: 12),
+          _HltbBar(label: 'Completista 100%', hours: compl, color: _purple, total: compl),
+        ],
+      ),
+    );
   }
 }
 
-class _HltbStat extends StatelessWidget {
-  const _HltbStat({required this.label, required this.hours});
-  final String label, hours;
+class _HltbBar extends StatelessWidget {
+  const _HltbBar({required this.label, required this.hours, required this.color, required this.total});
+  final String label; final int hours, total; final Color color;
   @override
   Widget build(BuildContext context) {
-    return Column(children: [Text(label, style: const TextStyle(fontSize: 10, color: _textSub)), Text(hours, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white))]);
+    final progress = total > 0 ? (hours / total).clamp(0.0, 1.0) : 1.0;
+    return Column(children: [
+      Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+        Text(label, style: const TextStyle(color: _textMain, fontSize: 11)),
+        Text('~$hours h', style: TextStyle(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+      ]),
+      const SizedBox(height: 6),
+      ClipRRect(borderRadius: BorderRadius.circular(4), child: LinearProgressIndicator(value: progress, backgroundColor: Colors.white10, color: color, minHeight: 6)),
+    ]);
   }
 }
 
@@ -236,7 +495,43 @@ class _PriceCompareModule extends StatelessWidget {
   final Game game; final List<GameDeal> deals;
   @override
   Widget build(BuildContext context) {
-    return _ModuleCard(icon: Icons.shopping_cart_rounded, iconColor: _yellow, title: 'Comparador de Precios', child: Column(children: deals.map((d) => ListTile(title: Text(d.storeName ?? "Tienda", style: const TextStyle(color: Colors.white, fontSize: 13)), trailing: Text('${d.salePrice}€', style: const TextStyle(color: _green, fontWeight: FontWeight.bold)), onTap: () => launchUrl(Uri.parse(d.dealUrl!)))).toList()));
+    return _ModuleCard(
+      icon: Icons.compare_arrows_rounded, iconColor: _yellow, title: 'Comparador de Precios',
+      child: deals.isEmpty 
+        ? const Text('No hay ofertas disponibles en este momento.', style: TextStyle(color: _textSub, fontSize: 12))
+        : Column(children: deals.map((d) => _DealRow(deal: d)).toList()),
+    );
+  }
+}
+
+class _DealRow extends StatelessWidget {
+  const _DealRow({required this.deal});
+  final GameDeal deal;
+  @override
+  Widget build(BuildContext context) {
+    final cfg = deal.store.config;
+    return InkWell(
+      onTap: () => launchUrl(Uri.parse(deal.dealUrl ?? "")),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Row(children: [
+          Container(padding: const EdgeInsets.all(6), decoration: BoxDecoration(color: _bg, borderRadius: BorderRadius.circular(8)), child: Icon(cfg.icon, size: 14, color: cfg.color)),
+          const SizedBox(width: 12),
+          Expanded(child: Text(deal.storeName ?? cfg.name, style: const TextStyle(color: _textMain, fontSize: 13, fontWeight: FontWeight.w600))),
+          if (deal.discountPercent > 0) ...[
+            Text('${deal.originalPrice.toStringAsFixed(0)}€', style: const TextStyle(color: _textSub, fontSize: 10, decoration: TextDecoration.lineThrough)),
+            const SizedBox(width: 8),
+          ],
+          Text(deal.salePriceLabel, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+          if (deal.discountPercent > 0) ...[
+            const SizedBox(width: 8),
+            Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: _cyan.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(4)), child: Text('-${deal.discountPercent}%', style: const TextStyle(color: _cyan, fontSize: 10, fontWeight: FontWeight.bold))),
+          ],
+          const SizedBox(width: 8),
+          const Icon(Icons.open_in_new_rounded, size: 12, color: _textSub),
+        ]),
+      ),
+    );
   }
 }
 
@@ -245,7 +540,51 @@ class _InfoModule extends StatelessWidget {
   final Game game;
   @override
   Widget build(BuildContext context) {
-    return _ModuleCard(icon: Icons.info_rounded, iconColor: _textSub, title: 'Ficha Técnica', child: Html(data: game.pcRequirements ?? "No hay descripción disponible.", style: {"body": Style(color: _textMain, fontSize: FontSize(12))}));
+    return _ModuleCard(
+      icon: Icons.info_outline_rounded, iconColor: _cyan, title: 'Información General',
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final itemWidth = (constraints.maxWidth - 16) / 3;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 8, runSpacing: 8,
+                children: [
+                  _InfoChip(label: 'Plataforma', value: game.platform.displayName, width: itemWidth),
+                  _InfoChip(label: 'Año', value: game.year.toString(), width: itemWidth),
+                  _InfoChip(label: 'Estado', value: game.status.label, valueColor: game.status.color, width: itemWidth),
+                  _InfoChip(label: 'Horas jugadas', value: '${game.playtime}h', valueColor: _cyan, width: itemWidth),
+                  if (game.esrbRating != null) _InfoChip(label: 'ESRB', value: game.esrbRating!, width: itemWidth),
+                ],
+              ),
+              if (game.genres.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Row(children: [const Icon(Icons.folder_open_rounded, size: 14, color: _textSub), const SizedBox(width: 8), Expanded(child: Text(game.genres.join(' • '), style: const TextStyle(color: _textSub, fontSize: 11)))]),
+              ],
+            ],
+          );
+        }
+      ),
+    );
+  }
+}
+
+class _InfoChip extends StatelessWidget {
+  const _InfoChip({required this.label, required this.value, this.valueColor, required this.width});
+  final String label, value; final Color? valueColor; final double width;
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(color: _bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: _border)),
+      child: Column(children: [
+        Text(label, style: const TextStyle(color: _textSub, fontSize: 8)),
+        const SizedBox(height: 2),
+        Text(value, style: TextStyle(color: valueColor ?? Colors.white, fontSize: 12, fontWeight: FontWeight.bold), textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis),
+      ]),
+    );
   }
 }
 
@@ -254,10 +593,21 @@ class _ModuleCard extends StatelessWidget {
   final IconData icon; final Color iconColor; final String title; final Widget child;
   @override
   Widget build(BuildContext context) {
-    return Container(padding: const EdgeInsets.all(16), decoration: BoxDecoration(color: _bgCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: _border)), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [Icon(icon, size: 16, color: iconColor), const SizedBox(width: 8), Text(title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.white))]),
-      const SizedBox(height: 14),
-      child,
-    ]));
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(color: _bgCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: _border)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(children: [Icon(icon, size: 16, color: iconColor), const SizedBox(width: 8), Text(title, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white))]),
+        const SizedBox(height: 16),
+        child,
+      ]),
+    );
+  }
+}
+
+extension StringExtension on String {
+  String capitalize() {
+    if (isEmpty) return this;
+    return "${this[0].toUpperCase()}${substring(1).toLowerCase()}";
   }
 }

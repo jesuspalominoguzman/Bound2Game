@@ -19,6 +19,18 @@ enum Platform {
 
   // Una ayuda para saber si el juego es de PC y así mirar si nuestro hardware puede con él.
   bool get isPc => this == Platform.steam || this == Platform.epic || this == Platform.ig;
+
+  static Platform fromString(String? s) {
+    if (s == null) return Platform.integrated;
+    final lower = s.toLowerCase();
+    if (lower.contains('steam')) return Platform.steam;
+    if (lower.contains('epic')) return Platform.epic;
+    if (lower.contains('playstation') || lower.contains('psn')) return Platform.playstation;
+    if (lower.contains('xbox')) return Platform.xbox;
+    if (lower.contains('nintendo')) return Platform.nintendo;
+    if (lower.contains('gaming')) return Platform.ig;
+    return Platform.integrated;
+  }
 }
 
 // ¿Cómo va la partida? He puesto los estados clásicos de cualquier biblioteca de juegos.

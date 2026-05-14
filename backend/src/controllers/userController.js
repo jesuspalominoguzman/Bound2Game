@@ -279,14 +279,43 @@ const searchUsers = async (req, res) => {
             return res.status(400).json({ error: 'Debes proporcionar un término de búsqueda' });
         }
 
-        // Buscar usuarios ignorando mayúsculas/minúsculas usando expresión regular
-        const users = await User.find({ username: { $regex: q, $options: 'i' } })
-                                .select('username avatarUrl karma bio isOnline')
-                                .limit(20);
+        const currentUserId = req.user.id;
+        const currentUser = await User.findById(currentUserId).select('friends pendingRequests');
+
+        // Buscar usuarios ignorando mayúsculas/minúsculas
+        const users = await User.find({ 
+            username: { $regex: q, $options: 'i' },
+            _id: { $ne: currentUserId } // No incluirse a uno mismo
+        })
+        .select('username avatarUrl karma bio isOnline friends pendingRequests')
+        .limit(20);
+
+        const usersWithStatus = users.map(u => {
+            let friendStatus = 'none';
+            const isFriend = u.friends.some(id => id.toString() === currentUserId);
+            const hasSentRequest = u.pendingRequests.some(id => id.toString() === currentUserId);
+            const receivedRequest = currentUser.pendingRequests.some(id => id.toString() === u._id.toString());
+
+            if (isFriend) {
+                friendStatus = 'friends';
+            } else if (hasSentRequest || receivedRequest) {
+                friendStatus = 'pending';
+            }
+
+            return {
+                id: u._id,
+                username: u.username,
+                avatarUrl: u.avatarUrl,
+                karma: u.karma,
+                bio: u.bio,
+                isOnline: u.isOnline,
+                friendStatus: friendStatus
+            };
+        });
 
         return res.status(200).json({
             message: 'Búsqueda exitosa',
-            users
+            users: usersWithStatus
         });
     } catch (error) {
         console.error('Error en searchUsers:', error);
@@ -439,6 +468,21 @@ const getUserProfilePublic = async (req, res) => {
             userRating = 'dislike';
         }
 
+        // Calcular estado de amistad
+        let friendStatus = 'none';
+        const currentUserId = req.user.id;
+        const currentUser = await User.findById(currentUserId).select('pendingRequests');
+        
+        const isFriend = targetUser.friends.some(id => id.toString() === currentUserId);
+        const hasSentRequest = targetUser.pendingRequests.some(id => id.toString() === currentUserId);
+        const receivedRequest = currentUser.pendingRequests.some(id => id.toString() === targetUser._id.toString());
+
+        if (isFriend) {
+            friendStatus = 'friends';
+        } else if (hasSentRequest || receivedRequest) {
+            friendStatus = 'pending';
+        }
+
         return res.status(200).json({
             message: 'Perfil público recuperado con éxito',
             profile: {
@@ -455,7 +499,8 @@ const getUserProfilePublic = async (req, res) => {
                 pcComponents: targetUser.pcComponents,
                 isOnline: targetUser.isOnline,
                 friendsCount: friendsCount,
-                userRating: userRating
+                userRating: userRating,
+                friendStatus: friendStatus
             }
         });
     } catch (error) {

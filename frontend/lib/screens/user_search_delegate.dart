@@ -7,12 +7,12 @@ import '../services/api_service.dart';
 import '../models/user_model.dart';
 import 'user_profile_screen.dart';
 
-// Mis colores para que el buscador pegue con el resto de la app.
+// ── CONFIGURACIÓN VISUAL ─────────────────────────────────────────────────────
 const _bg        = Color(0xFF121212);
 const _bgCard    = Color(0xFF1A1A1A);
-const _bgSearch  = Color(0xFF1E1E1E);
 const _border    = Color(0xFF2A2A2A);
 const _yellow    = Color(0xFFFFB800);
+const _yellowDim = Color(0x1AFFB800);
 const _textMain  = Colors.white;
 const _textSub   = Color(0xFF888888);
 const _textMuted = Color(0xFF555555);
@@ -31,15 +31,20 @@ class B2GUserSearchDelegate extends SearchDelegate<String?> {
       appBarTheme: const AppBarTheme(
         backgroundColor: _bgCard,
         elevation: 0,
+        iconTheme: IconThemeData(color: _yellow),
       ),
       inputDecorationTheme: const InputDecorationTheme(
         hintStyle: TextStyle(color: _textSub),
         border: InputBorder.none,
       ),
+      textSelectionTheme: const TextSelectionThemeData(
+        cursorColor: _yellow,
+        selectionColor: _yellowDim,
+        selectionHandleColor: _yellow,
+      ),
     );
   }
 
-  // El botón de la "X" para borrar lo que hayamos escrito y empezar de nuevo.
   @override
   List<Widget>? buildActions(BuildContext context) {
     return [
@@ -51,11 +56,10 @@ class B2GUserSearchDelegate extends SearchDelegate<String?> {
     ];
   }
 
-  // El botón de volver atrás, por si nos arrepentimos de buscar.
   @override
   Widget? buildLeading(BuildContext context) {
     return IconButton(
-      icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _yellow, size: 20),
+      icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
       onPressed: () => close(context, null),
     );
   }
@@ -67,7 +71,7 @@ class B2GUserSearchDelegate extends SearchDelegate<String?> {
   Widget buildSuggestions(BuildContext context) => _SearchBody(query: query);
 }
 
-// Aquí es donde ocurre la búsqueda real. He metido un "debounce" para no freír el servidor a peticiones mientras el usuario escribe.
+// ── CUERPO DE LA BÚSQUEDA ────────────────────────────────────────────────────
 class _SearchBody extends StatefulWidget {
   const _SearchBody({required this.query});
   final String query;
@@ -102,7 +106,6 @@ class _SearchBodyState extends State<_SearchBody> {
     super.dispose();
   }
 
-  // Esperamos un poquito (400ms) después de que el usuario deje de escribir para lanzar la búsqueda.
   void _performSearch() {
     if (_debounce?.isActive ?? false) _debounce!.cancel();
     
@@ -136,135 +139,287 @@ class _SearchBodyState extends State<_SearchBody> {
 
   @override
   Widget build(BuildContext context) {
-    if (_isLoading) {
-      return const Center(child: CircularProgressIndicator(color: _yellow, strokeWidth: 2));
-    }
-
-    if (_error != null) {
-      return Center(child: Text('Error: $_error', style: const TextStyle(color: Colors.redAccent)));
-    }
-
-    if (_results.isEmpty && widget.query.isNotEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.person_search_rounded, size: 64, color: _textMuted),
-            const SizedBox(height: 16),
-            Text('No se encontraron usuarios para "${widget.query}"', 
-              style: const TextStyle(color: _textSub)),
-          ],
-        ),
-      );
-    }
+    if (widget.query.isEmpty) return const _EmptyQueryHint();
+    if (_isLoading) return const Center(child: CircularProgressIndicator(color: _yellow, strokeWidth: 2));
+    if (_error != null) return _ErrorHint(message: _error!);
+    if (_results.isEmpty) return _NoResults(query: widget.query);
 
     return ListView.builder(
       padding: const EdgeInsets.symmetric(vertical: 12),
       itemCount: _results.length,
-      itemBuilder: (context, index) => _UserCard(user: _results[index]),
+      itemBuilder: (context, index) => _UserCard(
+        user: _results[index],
+        onStatusChanged: (newStatus) {
+          setState(() {
+            _results[index] = _results[index].copyWith(friendStatus: newStatus);
+          });
+        },
+      ),
     );
   }
 }
 
-// La tarjetita de cada usuario que encontramos. Tiene el botón para mandar la solicitud de amistad.
+// ── TARJETA DE USUARIO ───────────────────────────────────────────────────────
 class _UserCard extends StatefulWidget {
-  const _UserCard({required this.user});
+  const _UserCard({required this.user, required this.onStatusChanged});
   final UserSearchResult user;
-
+  final Function(String) onStatusChanged;
   @override
   State<_UserCard> createState() => _UserCardState();
 }
 
 class _UserCardState extends State<_UserCard> {
-  bool _isRequesting = false;
-  String _friendStatus = 'none'; // 'none', 'pending', 'accepted', 'friends'
+  bool _loading = false;
+  String _status = 'none';
+  bool _pressed = false;
 
   @override
   void initState() {
     super.initState();
+    _status = widget.user.friendStatus ?? 'none';
   }
 
-  // Al pulsar el botón, mandamos la solicitud. Si el otro ya nos la había mandado, nos hacemos amigos directamente.
-  Future<void> _handleFriendRequest() async {
-    setState(() => _isRequesting = true);
+  @override
+  void didUpdateWidget(_UserCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.user.friendStatus != widget.user.friendStatus) {
+      _status = widget.user.friendStatus ?? 'none';
+    }
+  }
+
+  Future<void> _handleFriendAction() async {
+    setState(() => _loading = true);
     try {
-      final status = await ApiService.sendFriendRequest(widget.user.id);
+      final res = await ApiService.sendFriendRequest(widget.user.id);
       if (mounted) {
         setState(() {
-          _friendStatus = status;
-          _isRequesting = false;
+          _status = res;
+          _loading = false;
         });
-        String msg = status == 'accepted' ? '¡Ahora sois amigos!' : 'Solicitud enviada';
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(msg),
-          backgroundColor: _bgCard,
-          behavior: SnackBarBehavior.floating,
-        ));
+        widget.onStatusChanged(res);
       }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isRequesting = false);
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
-      }
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      decoration: BoxDecoration(
-        color: _bgCard,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _border),
-      ),
-      child: ListTile(
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        leading: CircleAvatar(
-          radius: 26,
-          backgroundColor: _bgSearch,
-          backgroundImage: widget.user.avatarUrl != null ? NetworkImage(widget.user.avatarUrl!) : null,
-          child: widget.user.avatarUrl == null
-            ? const Icon(Icons.person_rounded, color: _yellow)
-            : null,
+    final initials = widget.user.username.length >= 2 
+        ? widget.user.username.substring(0, 2).toUpperCase() 
+        : widget.user.username.toUpperCase();
+    
+    final colors = [Colors.cyan, Colors.purple, Colors.orange, Colors.pink, Colors.blue, Colors.teal];
+    final bgColor = colors[widget.user.username.length % colors.length];
+
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) => setState(() => _pressed = false),
+      onTapCancel: () => setState(() => _pressed = false),
+      onTap: () {
+        Navigator.push(context, MaterialPageRoute(
+          builder: (_) => UserProfileScreen(user: User(
+            id: widget.user.id,
+            username: widget.user.username,
+            avatarUrl: widget.user.avatarUrl,
+            karma: widget.user.karma,
+            email: '',
+            recentGames: [],
+            recentGameCovers: [],
+            isOnline: false,
+          )),
+        ));
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 100),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: _pressed ? const Color(0xFF222222) : _bgCard,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: _pressed ? _yellow.withValues(alpha: 0.5) : _border,
+            width: _pressed ? 1.5 : 1,
+          ),
+          boxShadow: _pressed ? [
+            BoxShadow(color: _yellow.withValues(alpha: 0.08), blurRadius: 12, offset: const Offset(0, 4)),
+          ] : null,
         ),
-        title: Text(widget.user.username, style: const TextStyle(color: _textMain, fontWeight: FontWeight.bold, fontSize: 16)),
-        subtitle: Row(
+        child: Row(
           children: [
-            const Icon(Icons.star_rounded, size: 14, color: _yellow),
-            const SizedBox(width: 4),
-            Text('${widget.user.karma} karma', style: const TextStyle(color: _textSub, fontSize: 12)),
+            // Avatar
+            Container(
+              width: 50, height: 50,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: bgColor,
+                border: Border.all(color: _yellow.withValues(alpha: 0.3), width: 1.5),
+              ),
+              child: widget.user.avatarUrl != null && widget.user.avatarUrl!.isNotEmpty
+                  ? ClipOval(child: Image.network(widget.user.avatarUrl!, fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Center(child: Text(initials,
+                          style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.w800)))))
+                  : Center(child: Text(initials,
+                      style: const TextStyle(color: Colors.black, fontSize: 16, fontWeight: FontWeight.w800))),
+            ),
+            const SizedBox(width: 14),
+
+            // Info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(widget.user.username,
+                    style: const TextStyle(color: _textMain, fontSize: 15, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 3),
+                  Row(children: [
+                    const Icon(Icons.star_rounded, color: _yellow, size: 12),
+                    const SizedBox(width: 4),
+                    Text('${widget.user.karma} karma',
+                      style: const TextStyle(color: _textSub, fontSize: 11)),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.videogame_asset_rounded, color: _textMuted, size: 12),
+                    const SizedBox(width: 4),
+                    const Text('Ver juegos', style: TextStyle(color: _textMuted, fontSize: 11)),
+                  ]),
+                ],
+              ),
+            ),
+
+            // Botón
+            const SizedBox(width: 8),
+            _loading
+                ? const SizedBox(width: 36, height: 36,
+                    child: Padding(padding: EdgeInsets.all(8),
+                      child: CircularProgressIndicator(color: _yellow, strokeWidth: 2)))
+                : _FriendButton(status: _status, onTap: _handleFriendAction),
           ],
         ),
-        trailing: _isRequesting 
-          ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: _yellow, strokeWidth: 2))
-          : IconButton(
-              icon: Icon(
-                _friendStatus == 'accepted' || _friendStatus == 'friends' 
-                  ? Icons.check_circle_rounded 
-                  : _friendStatus == 'pending' 
-                    ? Icons.pending_rounded 
-                    : Icons.person_add_rounded,
-                color: _friendStatus != 'none' ? _yellow : _textSub,
-              ),
-              onPressed: _handleFriendRequest,
-            ),
-        onTap: () {
-          // Si tocamos en el usuario, nos lleva a ver su perfil público para ver a qué juega.
-          Navigator.push(context, MaterialPageRoute(
-            builder: (_) => UserProfileScreen(user: User(
-              id: widget.user.id,
-              username: widget.user.username,
-              avatarUrl: widget.user.avatarUrl,
-              karma: widget.user.karma,
-              // Campos mínimos para que UserProfileScreen no falle
-              email: '',
-              recentGames: [],
-              recentGameCovers: [],
-              isOnline: false,
-            )),
-          ));
-        },
+      ),
+    );
+  }
+}
+
+// ── BOTÓN DE AMISTAD ─────────────────────────────────────────────────────────
+class _FriendButton extends StatelessWidget {
+  const _FriendButton({required this.status, required this.onTap});
+  final String status;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final (icon, fgColor, bgColor) = switch (status) {
+      'friends' || 'accepted' => (Icons.check_circle_rounded, _yellow, _yellowDim),
+      'pending'               => (Icons.hourglass_top_rounded, _yellow, _yellowDim),
+      _                       => (Icons.person_add_alt_1_rounded, Colors.black, _yellow),
+    };
+
+    final label = switch (status) {
+      'friends' || 'accepted' => 'Amigos',
+      'pending'               => 'Enviada',
+      _                       => 'Añadir',
+    };
+
+    return GestureDetector(
+      onTap: (status == 'pending' || status == 'friends') ? null : onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: (status == 'none') ? _yellow : _yellowDim,
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: fgColor, size: 15),
+            const SizedBox(width: 5),
+            Text(label, style: TextStyle(
+              color: fgColor, fontSize: 12, fontWeight: FontWeight.w700)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── WIDGETS AUXILIARES ───────────────────────────────────────────────────────
+class _EmptyQueryHint extends StatelessWidget {
+  const _EmptyQueryHint();
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Container(
+          width: 80, height: 80,
+          decoration: BoxDecoration(color: _yellowDim, shape: BoxShape.circle,
+            border: Border.all(color: _yellow.withValues(alpha: 0.3))),
+          child: const Icon(Icons.person_search_rounded, color: _yellow, size: 36),
+        ),
+        const SizedBox(height: 20),
+        const Text('Busca jugadores por nombre\npara ver su perfil y juegos',
+          style: TextStyle(color: _textSub, fontSize: 14, height: 1.5),
+          textAlign: TextAlign.center),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+          decoration: BoxDecoration(color: _yellowDim, borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: _yellow.withValues(alpha: 0.4))),
+          child: const Text('Escribe un nombre para empezar',
+            style: TextStyle(color: _yellow, fontSize: 12, fontWeight: FontWeight.w600)),
+        ),
+      ]),
+    );
+  }
+}
+
+class _ErrorHint extends StatelessWidget {
+  const _ErrorHint({required this.message});
+  final String message;
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          Container(
+            width: 72, height: 72,
+            decoration: BoxDecoration(color: _yellowDim, shape: BoxShape.circle),
+            child: const Icon(Icons.wifi_off_rounded, color: _yellow, size: 32),
+          ),
+          const SizedBox(height: 20),
+          const Text('Error de conexión',
+            style: TextStyle(color: _textMain, fontSize: 15, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 8),
+          Text(message,
+            style: const TextStyle(color: _textSub, fontSize: 12),
+            textAlign: TextAlign.center,
+            maxLines: 3, overflow: TextOverflow.ellipsis),
+        ]),
+      ),
+    );
+  }
+}
+
+class _NoResults extends StatelessWidget {
+  const _NoResults({required this.query});
+  final String query;
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          const Icon(Icons.search_off_rounded, color: _textMuted, size: 52),
+          const SizedBox(height: 16),
+          Text('Sin resultados para\n"$query"',
+            style: const TextStyle(color: _textSub, fontSize: 14, height: 1.5),
+            textAlign: TextAlign.center),
+        ]),
       ),
     );
   }
