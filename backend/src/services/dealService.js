@@ -42,16 +42,18 @@ const getDeals = async (limit = 100) => {
 
     console.log(`🌐 Buscando ofertas en CheapShark API...`);
     
-    // 2. Si no hay caché, buscar SIEMPRE el máximo (200) para tener una buena base
-    const response = await axios.get(
-        `https://www.cheapshark.com/api/1.0/deals?sortBy=DealRating&pageSize=200&onSale=1`
-    );
-    console.log(`📡 Recibidas ${response.data.length} ofertas de CheapShark`);
+    // 2. Si no hay caché, buscar 2 páginas (CheapShark tiene un límite de 60 por página)
+    const [page0, page1] = await Promise.all([
+        axios.get(`https://www.cheapshark.com/api/1.0/deals?sortBy=DealRating&pageSize=60&pageNumber=0&onSale=1`),
+        axios.get(`https://www.cheapshark.com/api/1.0/deals?sortBy=DealRating&pageSize=60&pageNumber=1&onSale=1`)
+    ]);
+    const allDeals = [...(page0.data || []), ...(page1.data || [])];
+    console.log(`📡 Recibidas ${allDeals.length} ofertas de CheapShark`);
 
     const storeNames = await getStoreNames();
 
     const newDeals = [];
-    for (const deal of response.data) {
+    for (const deal of allDeals) {
         const storeKey = STORE_MAP[deal.storeID] || 'other';
 
         const storeName = storeNames[deal.storeID] || 'Store';
