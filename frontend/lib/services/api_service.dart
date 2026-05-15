@@ -264,6 +264,7 @@ class ApiService {
   static String get baseUrl => dotenv.env['API_URL'] ?? '';
 
   static const _timeout = Duration(seconds: 20);
+  static const String _rawgKey = '42709b841ddd4990af559a90c96b8b0e';
 
   // Preparamos las cabeceras, metiendo el token de seguridad si hace falta.
   static Future<Map<String, String>> _headers({bool withAuth = false}) async {
@@ -710,5 +711,59 @@ class ApiService {
     return games
         .map((g) => Deal.fromJson(g as Map<String, dynamic>))
         .toList();
+  }
+
+  // --- NUEVAS RUTAS PARA AVATARES (RAWG) ---
+
+  // Buscar avatares en RAWG (personajes o juegos)
+  static Future<List<String>> fetchRawgAvatars(String query) async {
+    // Si no hay búsqueda, traemos juegos populares para dar opciones variadas
+    final q = query.trim().isEmpty ? 'top' : query;
+    final uri = Uri.parse('https://api.rawg.io/api/games?key=$_rawgKey&search=$q&page_size=40');
+    
+    try {
+      final r = await http.get(uri).timeout(_timeout);
+      if (r.statusCode != 200) return [];
+      
+      final data = jsonDecode(r.body);
+      final results = data['results'] as List? ?? [];
+      
+      // Filtramos las imágenes que vengan vacías
+      return results
+          .map((g) => g['background_image']?.toString())
+          .where((url) => url != null && url.isNotEmpty)
+          .cast<String>()
+          .toList();
+    } catch (e) {
+      print('Error al buscar avatares en RAWG: $e');
+      return [];
+    }
+  }
+
+  // Actualizar el avatar en nuestro backend
+  static Future<void> updateAvatar(String? avatarUrl) async {
+    final r = await http
+        .put(
+          Uri.parse('$baseUrl/api/users/me/avatar'),
+          headers: await _headers(withAuth: true),
+          body: jsonEncode({'avatarUrl': avatarUrl}),
+        )
+        .timeout(_timeout);
+
+    final data = _parse(r);
+
+    // Actualizamos la sesión local para que el cambio sea instantáneo en toda la app
+    final session = await AuthService.loadSession();
+    if (session != null) {
+      final updatedUser = AuthUser(
+        id: session.user.id,
+        username: session.user.username,
+        email: session.user.email,
+        avatarUrl: data['avatarUrl']?.toString() ?? '',
+        reputation: session.user.reputation,
+        pcComponents: session.user.pcComponents,
+      );
+      await AuthService.saveSession(session.token, updatedUser);
+    }
   }
 }

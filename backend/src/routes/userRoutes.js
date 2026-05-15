@@ -45,6 +45,9 @@ router.put('/me/platforms', authMiddleware, userController.updatePlatforms);
 // PUT /api/users/me/fcm-token (Ruta Protegida)
 router.put('/me/fcm-token', authMiddleware, userController.updateFcmToken);
 
+// PUT /api/users/me/avatar (Ruta Protegida)
+router.put('/me/avatar', authMiddleware, userController.updateAvatar);
+
 // ── Biblioteca del usuario ─────────────────────────────────────────────────────
 // GET    /api/users/:userId/library          → obtener todos los juegos
 // POST   /api/users/:userId/library          → añadir juego

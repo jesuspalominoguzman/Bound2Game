@@ -5,6 +5,7 @@ import '../services/api_service.dart';
 import 'package:flutter/services.dart';
 import 'package:palette_generator/palette_generator.dart';
 import 'game_detail_screen.dart';
+import '../widgets/avatar_picker_sheet.dart';
 
 // ── Paleta ────────────────────────────────────────────────────────────────────
 const _bg       = Color(0xFF121212);
@@ -73,6 +74,38 @@ class ProfileScreenState extends State<ProfileScreen> {
   }
   Future<List<ApiGame>> _loadLibrary(String userId) async {
     return await ApiService.getUserLibraryPreview(userId);
+  }
+
+  void _openAvatarPicker() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => AvatarPickerSheet(
+        onSelected: (url) async {
+          try {
+            await ApiService.updateAvatar(url);
+            refresh(); // Recargamos todo el perfil
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('¡Perfil actualizado! 🎮'), 
+                  backgroundColor: _yellow,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              );
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Error: $e'), backgroundColor: Colors.redAccent),
+              );
+            }
+          }
+        },
+      ),
+    );
   }
 
   @override
@@ -284,22 +317,25 @@ class ProfileScreenState extends State<ProfileScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Avatar
-                        Container(
-                          width: 90,
-                          height: 90,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: u.avatarBgColor,
-                            border: Border.all(color: _dominantColor, width: 3),
-                            boxShadow: [
-                              BoxShadow(color: _dominantColor.withValues(alpha: 0.2), blurRadius: 20, spreadRadius: 5),
-                            ],
+                        // Avatar (Ahora clickeable)
+                        GestureDetector(
+                          onTap: _openAvatarPicker,
+                          child: Container(
+                            width: 90,
+                            height: 90,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: u.avatarBgColor,
+                              border: Border.all(color: _dominantColor, width: 3),
+                              boxShadow: [
+                                BoxShadow(color: _dominantColor.withValues(alpha: 0.2), blurRadius: 20, spreadRadius: 5),
+                              ],
+                            ),
+                            child: u.avatarUrl != null && u.avatarUrl!.isNotEmpty
+                                ? ClipOval(child: Image.network(u.avatarUrl!, fit: BoxFit.cover))
+                                : Center(child: Text(u.initials,
+                                    style: const TextStyle(color: Colors.black, fontSize: 30, fontWeight: FontWeight.w900))),
                           ),
-                          child: u.avatarUrl != null && u.avatarUrl!.isNotEmpty
-                              ? ClipOval(child: Image.network(u.avatarUrl!, fit: BoxFit.cover))
-                              : Center(child: Text(u.initials,
-                                  style: const TextStyle(color: Colors.black, fontSize: 30, fontWeight: FontWeight.w900))),
                         ),
                         const SizedBox(height: 12),
                         Text(u.username,

@@ -608,6 +608,31 @@ const rateUser = async (req, res) => {
     }
 };
 
+/**
+ * Actualiza el avatar del usuario
+ */
+const updateAvatar = async (req, res) => {
+    try {
+        const { avatarUrl } = req.body;
+        const user = await User.findById(req.user.id);
+        
+        if (!user) {
+            return res.status(404).json({ error: 'Usuario no encontrado' });
+        }
+
+        user.avatarUrl = avatarUrl; // Puede ser null para eliminar
+        await user.save();
+
+        res.json({
+            message: 'Avatar actualizado correctamente',
+            avatarUrl: user.avatarUrl
+        });
+    } catch (error) {
+        console.error('Error en updateAvatar:', error);
+        res.status(500).json({ error: 'Error al actualizar el avatar' });
+    }
+};
+
 module.exports = {
     registerUser,
     loginUser,
@@ -622,5 +647,6 @@ module.exports = {
     getUserProfilePublic,
     updatePlatforms,
     updateFcmToken,
-    rateUser
+    rateUser,
+    updateAvatar
 };
