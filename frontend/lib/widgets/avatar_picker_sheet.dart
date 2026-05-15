@@ -20,11 +20,14 @@ class _AvatarPickerSheetState extends State<AvatarPickerSheet> {
     _loadAvatars();
   }
 
-  Future<void> _loadAvatars([String query = '']) async {
+  Future<void> _loadAvatars() async {
     setState(() => _isLoading = true);
     try {
-      final results = await ApiService.fetchRawgAvatars(query);
-      setState(() => _avatars = results);
+      // Traemos 21 imágenes (múltiplo de 3) de juegos altamente visuales e icónicos
+      final results = await ApiService.fetchRawgAvatars('legendary characters');
+      setState(() {
+        _avatars = results.take(21).toList();
+      });
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -36,7 +39,7 @@ class _AvatarPickerSheetState extends State<AvatarPickerSheet> {
     const bg = Color(0xFF1A1A1A);
 
     return Container(
-      height: MediaQuery.of(context).size.height * 0.85,
+      height: MediaQuery.of(context).size.height * 0.7,
       decoration: const BoxDecoration(
         color: bg,
         borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
@@ -61,9 +64,9 @@ class _AvatarPickerSheetState extends State<AvatarPickerSheet> {
                 const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Avatar Gamer', 
+                    Text('Elige tu Avatar', 
                       style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w900)),
-                    Text('Busca tus juegos favoritos', 
+                    Text('Personajes icónicos del gaming', 
                       style: TextStyle(color: Colors.white38, fontSize: 13)),
                   ],
                 ),
@@ -84,62 +87,22 @@ class _AvatarPickerSheetState extends State<AvatarPickerSheet> {
             ),
           ),
 
-          // Buscador premium
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-            child: TextField(
-              controller: _searchController,
-              onSubmitted: (val) => _loadAvatars(val),
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-              decoration: InputDecoration(
-                hintText: 'Ej: God of War, Elden Ring...',
-                hintStyle: const TextStyle(color: Colors.white24),
-                prefixIcon: const Icon(Icons.search_rounded, color: yellow),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.send_rounded, color: yellow),
-                  onPressed: () => _loadAvatars(_searchController.text),
-                ),
-                filled: true,
-                fillColor: Colors.white.withOpacity(0.04),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20), 
-                  borderSide: BorderSide.none
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(20), 
-                  borderSide: const BorderSide(color: yellow, width: 1)
-                ),
-              ),
-            ),
-          ),
+          const SizedBox(height: 10),
 
           // Grid de avatares con efectos
           Expanded(
             child: _isLoading 
               ? const Center(child: CircularProgressIndicator(color: yellow))
-              : _avatars.isEmpty
-                ? const Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.videogame_asset_off_rounded, color: Colors.white10, size: 64),
-                        SizedBox(height: 16),
-                        Text('No hemos encontrado imágenes', 
-                          style: TextStyle(color: Colors.white38, fontSize: 15)),
-                      ],
-                    ),
-                  )
-                : GridView.builder(
-                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 3,
-                      mainAxisSpacing: 16,
-                      crossAxisSpacing: 16,
-                      childAspectRatio: 1,
-                    ),
-                    itemCount: _avatars.length,
-                    itemBuilder: (ctx, i) {
+              : GridView.builder(
+                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 40),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3,
+                    mainAxisSpacing: 16,
+                    crossAxisSpacing: 16,
+                    childAspectRatio: 1,
+                  ),
+                  itemCount: _avatars.length,
+                  itemBuilder: (ctx, i) {
                       return GestureDetector(
                         onTap: () {
                           widget.onSelected(_avatars[i]);

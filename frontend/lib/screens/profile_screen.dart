@@ -317,24 +317,45 @@ class ProfileScreenState extends State<ProfileScreen> {
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Avatar (Ahora clickeable)
+                        // Avatar (Ahora clickeable con icono de lápiz)
                         GestureDetector(
                           onTap: _openAvatarPicker,
-                          child: Container(
-                            width: 90,
-                            height: 90,
-                            decoration: BoxDecoration(
-                              shape: BoxShape.circle,
-                              color: u.avatarBgColor,
-                              border: Border.all(color: _dominantColor, width: 3),
-                              boxShadow: [
-                                BoxShadow(color: _dominantColor.withValues(alpha: 0.2), blurRadius: 20, spreadRadius: 5),
-                              ],
-                            ),
-                            child: u.avatarUrl != null && u.avatarUrl!.isNotEmpty
-                                ? ClipOval(child: Image.network(u.avatarUrl!, fit: BoxFit.cover))
-                                : Center(child: Text(u.initials,
-                                    style: const TextStyle(color: Colors.black, fontSize: 30, fontWeight: FontWeight.w900))),
+                          child: Stack(
+                            children: [
+                              Container(
+                                width: 90,
+                                height: 90,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: u.avatarBgColor,
+                                  border: Border.all(color: _dominantColor, width: 3),
+                                  boxShadow: [
+                                    BoxShadow(color: _dominantColor.withValues(alpha: 0.2), blurRadius: 20, spreadRadius: 5),
+                                  ],
+                                ),
+                                child: u.avatarUrl != null && u.avatarUrl!.isNotEmpty
+                                    ? ClipOval(child: Image.network(u.avatarUrl!, fit: BoxFit.cover))
+                                    : Center(child: Text(u.initials,
+                                        style: const TextStyle(color: Colors.black, fontSize: 30, fontWeight: FontWeight.w900))),
+                              ),
+                              // Icono de lápiz (edit)
+                              Positioned(
+                                bottom: 0,
+                                right: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: _yellow,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(color: _bg, width: 2),
+                                    boxShadow: [
+                                      BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 2)),
+                                    ],
+                                  ),
+                                  child: const Icon(Icons.edit_rounded, color: Colors.black, size: 14),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(height: 12),
