@@ -6,7 +6,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/deal_model.dart';
 import '../services/api_service.dart';
 import '../widgets/deals_widgets.dart';
-import 'game_detail_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'store_detail_screen.dart';
 
 const _bg = Color(0xFF0A0A0A);
@@ -41,11 +41,19 @@ class _DealsScreenState extends State<DealsScreen> {
     _upcomingGamesFuture = ApiService.fetchUpcomingGames();
   }
 
-  // Si el usuario toca un juego, lo mandamos a la pantalla de detalles con toda la info.
+  // Si el usuario toca un juego, abrimos el enlace de la oferta en el navegador.
+  Future<void> _launchDealUrl(String? url) async {
+    if (url == null || url.isEmpty) return;
+    final uri = Uri.parse(url);
+    try {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } catch (_) {
+      debugPrint('Error lanzando URL: $url');
+    }
+  }
+
   void _navigateToGame(Deal deal) {
-    Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => GameDetailScreen(baseGame: deal.toGame()),
-    ));
+    _launchDealUrl(deal.dealUrl);
   }
 
   // Para ver qué hay en una tienda específica (Steam, Epic...).
