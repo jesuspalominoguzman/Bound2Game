@@ -107,7 +107,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
   bool get _isOwned {
     if (_removedFromLibraryLocal) return false;
     if (_addedToLibraryLocal) return true;
-    return _fullGame?.entryId != null || widget.entryId != null || _addedEntryId != null;
+    return widget.entryId != null || _addedEntryId != null;
   }
 
   bool _isInWishlist = false;

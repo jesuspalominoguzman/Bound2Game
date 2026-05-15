@@ -40,6 +40,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   bool _isLoadingProfile = true;
   late Future<List<ApiGame>> _libraryFuture;
   Color _dominantColor = _yellow;
+  bool _isFriendActionLoading = false;
 
   @override
   void initState() {
@@ -146,6 +147,53 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     }
   }
 
+  Future<void> _handleFriendAction(User u) async {
+    if (u.friendStatus == 'friends' || u.friendStatus == 'accepted') {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          title: const Text('Eliminar Amigo', style: TextStyle(color: Colors.white)),
+          content: Text('¿Seguro que quieres eliminar a ${u.username} de tus amigos?', style: const TextStyle(color: Colors.white70)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Eliminar', style: TextStyle(color: Colors.redAccent)),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+
+    if (!mounted) return;
+    setState(() => _isFriendActionLoading = true);
+    try {
+      final res = await ApiService.sendFriendRequest(u.id);
+      if (mounted) {
+        setState(() {
+          _user = (_user ?? widget.user).copyWith(friendStatus: res);
+          _isFriendActionLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isFriendActionLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error: $e', style: const TextStyle(color: Colors.black)),
+            backgroundColor: _yellow,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // Usamos el usuario original hasta que cargue el completo para mantener la UI fluida
@@ -173,6 +221,9 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
 
                 // ── Estadísticas rápidas (Amigos, Karma) ─────────────────────
                 _buildStats(u),
+
+                // ── Botón de Amistad ─────────────────────────────────────────
+                _buildFriendButton(u),
 
                 // ── Acciones de Karma (Like / Dislike) ───────────────────────
                 _buildKarmaActions(u),
@@ -494,6 +545,47 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
             Text('${u.username} no tiene juegos públicos',
                 style: const TextStyle(color: _textSub, fontSize: 13), textAlign: TextAlign.center),
           ]),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFriendButton(User u) {
+    // Si somos nosotros mismos, no mostramos el botón
+    // (Podríamos detectarlo comparando IDs, pero normalmente no llegamos aquí)
+    
+    final status = u.friendStatus ?? 'none';
+    
+    final (label, icon, color) = switch (status) {
+      'friends' || 'accepted' => ('Amigos (Click para eliminar)', Icons.people_alt_rounded, _cyan),
+      'pending'               => ('Solicitud Enviada (Cancelar)', Icons.hourglass_empty_rounded, _yellow),
+      _                       => ('Añadir Amigo', Icons.person_add_alt_1_rounded, _yellow),
+    };
+
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        child: SizedBox(
+          width: double.infinity,
+          height: 48,
+          child: ElevatedButton.icon(
+            onPressed: _isFriendActionLoading ? null : () => _handleFriendAction(u),
+            icon: _isFriendActionLoading 
+              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+              : Icon(icon, size: 20),
+            label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: status == 'friends' || status == 'accepted' 
+                ? _cyan.withValues(alpha: 0.1) 
+                : _yellow,
+              foregroundColor: status == 'friends' || status == 'accepted' ? _cyan : Colors.black,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(color: status == 'friends' || status == 'accepted' ? _cyan.withValues(alpha: 0.4) : Colors.transparent),
+              ),
+              elevation: 0,
+            ),
+          ),
         ),
       ),
     );

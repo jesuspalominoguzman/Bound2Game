@@ -452,7 +452,7 @@ const getUserProfilePublic = async (req, res) => {
         }
 
         const targetUser = await User.findById(userId)
-            .select('username avatarUrl bio karma reputation steamId epicId xboxId discordId pcComponents isOnline friends likedBy dislikedBy')
+            .select('username avatarUrl bio karma reputation steamId epicId xboxId discordId pcComponents isOnline friends likedBy dislikedBy pendingRequests')
             .lean();
 
         if (!targetUser) {
