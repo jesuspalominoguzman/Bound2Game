@@ -719,7 +719,7 @@ class ApiService {
   static Future<List<String>> fetchRawgAvatars(String query) async {
     // Si no hay búsqueda, traemos juegos populares para dar opciones variadas
     final q = query.trim().isEmpty ? 'top' : query;
-    final uri = Uri.parse('https://api.rawg.io/api/games?key=$_rawgKey&search=$q&page_size=40');
+    final uri = Uri.parse('https://api.rawg.io/api/games?key=$rawgKey&search=$q&page_size=40');
     
     try {
       final r = await http.get(uri).timeout(_timeout);

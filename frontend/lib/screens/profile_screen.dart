@@ -64,7 +64,15 @@ class ProfileScreenState extends State<ProfileScreen> {
   Future<void> _updatePalette(String? url) async {
     if (url == null || url.isEmpty) return;
     try {
-      final palette = await PaletteGenerator.fromImageProvider(NetworkImage(url));
+      // Esperamos un poco a que termine la animación de entrada para evitar tirones
+      await Future.delayed(const Duration(milliseconds: 400));
+      if (!mounted) return;
+
+      final palette = await PaletteGenerator.fromImageProvider(
+        NetworkImage(url),
+        maximumColorCount: 10, // Menos colores = más rápido
+      );
+      
       if (mounted) {
         setState(() {
           _dominantColor = palette.dominantColor?.color ?? _yellow;
