@@ -57,7 +57,7 @@ class _UserCardState extends State<UserCard> {
       );
       return;
     }
-    if (_state == _FriendState.pending || _actionLoading) return;
+    if (_actionLoading) return;
 
     setState(() => _actionLoading = true);
     try {
@@ -68,6 +68,8 @@ class _UserCardState extends State<UserCard> {
             _state = _FriendState.friends;
           } else if (result == 'pending') {
             _state = _FriendState.pending;
+          } else if (result == 'none') {
+            _state = _FriendState.none;
           }
         });
       }

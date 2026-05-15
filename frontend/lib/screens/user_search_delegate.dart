@@ -324,7 +324,7 @@ class _FriendButton extends StatelessWidget {
     };
 
     return GestureDetector(
-      onTap: (status == 'pending' || status == 'friends') ? null : onTap,
+      onTap: (status == 'friends') ? null : onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
