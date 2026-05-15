@@ -23,10 +23,13 @@ class UserService {
             throw { status: 404, message: 'Usuario no encontrado' };
         }
 
-        // 1. ¿Ya son amigos?
+        // 1. ¿Ya son amigos? → ELIMINAR AMIGO
         const alreadyFriends = sender.friends.map(id => id.toString()).includes(targetId);
         if (alreadyFriends) {
-            return { status: 409, code: 'friends', message: 'Ya sois amigos' };
+            sender.friends = sender.friends.filter(id => id.toString() !== targetId);
+            receiver.friends = receiver.friends.filter(id => id.toString() !== senderId);
+            await Promise.all([sender.save(), receiver.save()]);
+            return { status: 200, code: 'none', message: 'Amigo eliminado' };
         }
 
         // 2. ¿El TARGET nos envió una solicitud previa? → ACEPTAR

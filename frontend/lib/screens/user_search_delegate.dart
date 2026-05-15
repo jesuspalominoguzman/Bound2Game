@@ -190,6 +190,29 @@ class _UserCardState extends State<_UserCard> {
   }
 
   Future<void> _handleFriendAction() async {
+    if (_status == 'friends' || _status == 'accepted') {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1A1A1A),
+          title: const Text('Eliminar Amigo', style: TextStyle(color: Colors.white)),
+          content: Text('¿Seguro que quieres eliminar a ${widget.user.username} de tus amigos?', style: const TextStyle(color: Colors.white70)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Eliminar', style: TextStyle(color: Colors.redAccent)),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+
+    if (!mounted) return;
     setState(() => _loading = true);
     try {
       final res = await ApiService.sendFriendRequest(widget.user.id);
@@ -324,7 +347,7 @@ class _FriendButton extends StatelessWidget {
     };
 
     return GestureDetector(
-      onTap: (status == 'friends') ? null : onTap,
+      onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),

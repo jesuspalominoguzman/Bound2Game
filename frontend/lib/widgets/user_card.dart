@@ -100,6 +100,48 @@ class _UserCardState extends State<UserCard> {
         );
         if (widget.onReturn != null) widget.onReturn!();
       },
+      onLongPress: () async {
+        if (_state != _FriendState.friends) return;
+        final confirm = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            backgroundColor: const Color(0xFF1A1A1A),
+            title: const Text('Eliminar Amigo', style: TextStyle(color: Colors.white)),
+            content: Text('¿Seguro que quieres eliminar a ${widget.user.username} de tus amigos?', style: const TextStyle(color: Colors.white70)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Cancelar', style: TextStyle(color: Colors.white54)),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Eliminar', style: TextStyle(color: Colors.redAccent)),
+              ),
+            ],
+          ),
+        );
+        
+        if (confirm == true) {
+          setState(() => _actionLoading = true);
+          try {
+            final result = await ApiService.sendFriendRequest(widget.user.id);
+            if (mounted && result == 'none') {
+              setState(() => _state = _FriendState.none);
+              if (widget.onReturn != null) widget.onReturn!();
+            }
+          } catch (e) {
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Error al eliminar amigo: $e'),
+                backgroundColor: const Color(0xFF1A1A1A),
+              ),
+            );
+          } finally {
+            if (mounted) setState(() => _actionLoading = false);
+          }
+        }
+      },
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
