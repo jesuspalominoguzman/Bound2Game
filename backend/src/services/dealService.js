@@ -28,7 +28,7 @@ const getStoreNames = async () => {
 /**
  * Obtiene ofertas desde la caché o desde CheapShark
  */
-const getDeals = async (limit = 100) => {
+const getDeals = async (limit = 120) => {
     // 1. Buscar en caché (forzar expiración)
     const twelveHoursAgo = new Date(Date.now());
     const cachedDeals = await DealCache.find({ 

@@ -247,6 +247,7 @@ class _SocialScreenState extends State<SocialScreen> {
                                 (context, index) => UserCard(
                                   user: filtered[index],
                                   isFriend: true,
+                                  onReturn: _refresh,
                                 ),
                                 childCount: filtered.length,
                               ),

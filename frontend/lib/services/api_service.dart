@@ -651,7 +651,7 @@ class ApiService {
   }
 
   // Pillamos las ofertas más destacadas.
-  static Future<List<Deal>> fetchDeals({int limit = 100}) async {
+  static Future<List<Deal>> fetchDeals({int limit = 120}) async {
     final uri = Uri.parse('$baseUrl/api/games/deals')
         .replace(queryParameters: {'limit': limit.toString()});
 

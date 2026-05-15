@@ -26,10 +26,12 @@ class UserCard extends StatefulWidget {
     super.key,
     required this.user,
     this.isFriend = false,
+    this.onReturn,
   });
 
   final User user;
   final bool isFriend;
+  final VoidCallback? onReturn;
 
   @override
   State<UserCard> createState() => _UserCardState();
@@ -87,13 +89,14 @@ class _UserCardState extends State<UserCard> {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTapDown: (_) => setState(() => _isPressed = true),
-      onTapUp: (_) {
+      onTapUp: (_) async {
         setState(() => _isPressed = false);
-        Navigator.of(context).push(
+        await Navigator.of(context).push(
           MaterialPageRoute(
             builder: (_) => UserProfileScreen(user: widget.user),
           ),
         );
+        if (widget.onReturn != null) widget.onReturn!();
       },
       onTapCancel: () => setState(() => _isPressed = false),
       child: AnimatedContainer(

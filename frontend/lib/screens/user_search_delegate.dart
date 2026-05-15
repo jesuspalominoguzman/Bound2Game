@@ -154,6 +154,7 @@ class _SearchBodyState extends State<_SearchBody> {
             _results[index] = _results[index].copyWith(friendStatus: newStatus);
           });
         },
+        onReturn: () => _performSearch(),
       ),
     );
   }
@@ -161,9 +162,10 @@ class _SearchBodyState extends State<_SearchBody> {
 
 // ── TARJETA DE USUARIO ───────────────────────────────────────────────────────
 class _UserCard extends StatefulWidget {
-  const _UserCard({required this.user, required this.onStatusChanged});
+  const _UserCard({required this.user, required this.onStatusChanged, required this.onReturn});
   final UserSearchResult user;
   final Function(String) onStatusChanged;
+  final VoidCallback onReturn;
   @override
   State<_UserCard> createState() => _UserCardState();
 }
@@ -216,8 +218,8 @@ class _UserCardState extends State<_UserCard> {
       onTapDown: (_) => setState(() => _pressed = true),
       onTapUp: (_) => setState(() => _pressed = false),
       onTapCancel: () => setState(() => _pressed = false),
-      onTap: () {
-        Navigator.push(context, MaterialPageRoute(
+      onTap: () async {
+        await Navigator.push(context, MaterialPageRoute(
           builder: (_) => UserProfileScreen(user: User(
             id: widget.user.id,
             username: widget.user.username,
@@ -229,6 +231,7 @@ class _UserCardState extends State<_UserCard> {
             isOnline: false,
           )),
         ));
+        widget.onReturn();
       },
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 100),

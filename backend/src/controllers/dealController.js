@@ -6,7 +6,7 @@ const dealService = require('../services/dealService');
  */
 const getDeals = async (req, res) => {
     try {
-        const limit = Math.min(parseInt(req.query.limit || '100', 10), 200);
+        const limit = Math.min(parseInt(req.query.limit || '120', 10), 200);
         const deals = await dealService.getDeals(limit);
         return res.json({ deals });
     } catch (error) {
