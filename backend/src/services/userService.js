@@ -49,10 +49,12 @@ class UserService {
             return { status: 200, code: 'accepted', message: '¡Solicitud aceptada! Ahora sois amigos.' };
         }
 
-        // 3. ¿Ya enviamos una solicitud antes?
+        // 3. ¿Ya enviamos una solicitud antes? → CANCELAR
         const alreadySent = receiver.pendingRequests.map(id => id.toString()).includes(senderId);
         if (alreadySent) {
-            return { status: 409, code: 'pending', message: 'Solicitud ya enviada' };
+            receiver.pendingRequests = receiver.pendingRequests.filter(id => id.toString() !== senderId);
+            await receiver.save();
+            return { status: 200, code: 'none', message: 'Solicitud cancelada' };
         }
 
         // 4. ENVIAR solicitud
