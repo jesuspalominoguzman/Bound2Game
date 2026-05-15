@@ -57,6 +57,8 @@ dependencies:
   flutter_html: ^3.0.0
   palette_generator: ^0.3.3+7
   url_launcher: ^6.3.2
+  share_plus: ^13.1.0
+  app_links: ^7.0.0
 
 dev_dependencies:
   flutter_test:

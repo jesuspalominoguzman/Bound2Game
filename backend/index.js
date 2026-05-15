@@ -37,6 +37,34 @@ app.get('/', (req, res) => {
     res.json({ mensaje: '¡El backend de Bound2Game está funcionando perfectamente!' });
 });
 
+// ── Rutas para Verificación de Deep Linking (HTTPS App Links) ───────────────
+// Android: Verifica que esta app es la dueña del dominio
+app.get('/.well-known/assetlinks.json', (req, res) => {
+    res.json([{
+        "relation": ["delegate_permission/common.handle_all_urls"],
+        "target": {
+            "namespace": "android_app",
+            "package_name": "com.example.frontend",
+            // TODO: El usuario debe poner su SHA256 real aquí para producción
+            "sha256_cert_fingerprints": ["FA:C6:17:45:DC:09:03:78:6F:B9:ED:46:29:0D:96:9B:03:9F:99:7D:6A:10:26:11:05:0F:50:42:8C:45:93:13"]
+        }
+    }]);
+});
+
+// iOS: Universal Links
+app.get('/.well-known/apple-app-site-association', (req, res) => {
+    res.set('Content-Type', 'application/json');
+    res.json({
+        "applinks": {
+            "apps": [],
+            "details": [{
+                "appID": "YOUR_TEAM_ID.com.example.frontend",
+                "paths": ["/user/*"]
+            }]
+        }
+    });
+});
+
 // ── Levantar el servidor con soporte WebSocket ────────────────────────────
 // Envolvemos Express en un servidor HTTP nativo para que Socket.io pueda
 // compartir el mismo puerto sin cambiar ninguna ruta REST existente.

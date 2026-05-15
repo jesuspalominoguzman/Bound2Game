@@ -12,6 +12,9 @@ import 'screens/login_screen.dart';
 import 'screens/shake_selector_screen.dart';
 import 'theme/app_theme.dart';
 import 'services/auth_service.dart';
+import 'package:app_links/app_links.dart';
+import 'models/user_model.dart';
+import 'screens/user_profile_screen.dart';
 
 // Esta llave nos sirve para navegar por la app sin tener que pasar el "contexto" por todas partes.
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -53,12 +56,55 @@ class Bound2GameApp extends StatefulWidget {
 class _Bound2GameAppState extends State<Bound2GameApp> {
   StreamSubscription<AccelerometerEvent>? _accelSub;
   bool _isShaking = false;
+  late AppLinks _appLinks;
+  StreamSubscription<Uri>? _linkSub;
 
   @override
   void initState() {
     super.initState();
     // Empezamos a escuchar por si el usuario agita el móvil.
     _initShakeListener();
+    _initDeepLinks();
+  }
+
+  void _initDeepLinks() {
+    _appLinks = AppLinks();
+
+    // Manejar enlaces recibidos mientras la app está abierta
+    _linkSub = _appLinks.uriLinkStream.listen((uri) {
+      _handleDeepLink(uri);
+    });
+
+    // Manejar el enlace que abrió la app inicialmente
+    _appLinks.getInitialLink().then((uri) {
+      if (uri != null) _handleDeepLink(uri);
+    });
+  }
+
+  void _handleDeepLink(Uri uri) async {
+    debugPrint('🔗 Deep Link recibido: $uri');
+    // Formato esperado: https://bound2game.onrender.com/user/{userId}
+    final isHttps = uri.scheme == 'https' && uri.host == 'bound2game.onrender.com';
+    final isCustom = uri.scheme == 'bound2game' && uri.host == 'user';
+
+    if ((isHttps || isCustom) && uri.pathSegments.isNotEmpty) {
+      // Si es HTTPS, el ID está en el segundo segmento (/user/{id})
+      // Si es custom, el ID está en el primero (/id)
+      final userId = isHttps 
+        ? (uri.pathSegments.length >= 2 ? uri.pathSegments[1] : null)
+        : uri.pathSegments.first;
+
+      if (userId != null && navigatorKey.currentState != null) {
+        final loggedIn = await AuthService.isLoggedIn();
+        if (loggedIn) {
+          navigatorKey.currentState!.push(
+            MaterialPageRoute(
+              builder: (_) => UserProfileScreen(user: User.minimal(userId)),
+            ),
+          );
+        }
+      }
+    }
   }
 
   // Si el usuario agita el móvil con fuerza, le abrimos la pantalla mágica que elige un juego por él.
@@ -92,6 +138,7 @@ class _Bound2GameAppState extends State<Bound2GameApp> {
   void dispose() {
     // Muy importante: cancelamos el acelerómetro al cerrar la app para no gastar batería.
     _accelSub?.cancel();
+    _linkSub?.cancel();
     super.dispose();
   }
 

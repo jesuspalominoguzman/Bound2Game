@@ -4,6 +4,7 @@ import '../models/game_model.dart' as gm;
 import '../services/api_service.dart';
 import 'package:flutter/services.dart';
 import 'package:palette_generator/palette_generator.dart';
+import 'package:share_plus/share_plus.dart';
 import 'dart:async';
 import '../services/presence_service.dart';
 import 'game_detail_screen.dart';
@@ -213,6 +214,14 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     }
   }
 
+  void _shareProfile(User u) {
+    final String text = '¡Mira el perfil de ${u.username} en Bound2Game! 🎮\n\n'
+        'Agrégame para ver mi biblioteca y comparar juegos.\n\n'
+        'Entra aquí: https://bound2game.onrender.com/user/${u.id}';
+    
+    Share.share(text, subject: 'Perfil de ${u.username} - Bound2Game');
+  }
+
   @override
   void dispose() {
     _friendRequestSub?.cancel();
@@ -405,6 +414,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         icon: const Icon(Icons.arrow_back_ios_new_rounded, color: _textMain, size: 20),
         onPressed: () => Navigator.of(context).pop(),
       ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.ios_share_rounded, color: _textMain, size: 22),
+          onPressed: () => _shareProfile(u),
+        ),
+        const SizedBox(width: 8),
+      ],
       flexibleSpace: LayoutBuilder(
         builder: (ctx, constraints) {
           final top = constraints.biggest.height;

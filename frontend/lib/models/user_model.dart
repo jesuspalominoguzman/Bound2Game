@@ -46,6 +46,10 @@ class User {
     this.friendStatus,
   });
 
+  factory User.minimal(String id) {
+    return User(id: id, username: 'Cargando...');
+  }
+
   factory User.fromJson(Map<String, dynamic> json) {
     var friendsList = <User>[];
     if (json['friends'] != null && json['friends'] is List) {
