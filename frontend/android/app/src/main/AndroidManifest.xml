@@ -38,11 +38,12 @@
             </intent-filter>
 
             <!-- Deep Linking (HTTPS App Links - Professional) -->
-            <intent-filter android:autoVerify="true">
+            <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="bound2game.onrender.com" android:pathPrefix="/user/" />
+                <data android:scheme="https" android:host="bound2game.onrender.com" android:pathPrefix="/user" />
+                <data android:scheme="https" android:host="bound2game.onrender.com" android:pathPattern="/user/.*" />
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
