@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
 import '../services/api_service.dart';
 
@@ -23,12 +25,24 @@ class _AvatarPickerSheetState extends State<AvatarPickerSheet> {
   Future<void> _loadAvatars() async {
     setState(() => _isLoading = true);
     try {
-      // Usamos una búsqueda más específica para obtener "iconos" o "personajes" centrados
-      final results = await ApiService.fetchRawgAvatars('gaming icon character');
-      setState(() {
-        // Cogemos 21 para que sea múltiplo de 3
-        _avatars = results.take(21).toList();
-      });
+      // Filtramos por los juegos mejor valorados de los últimos 2 años (2023-2024)
+      // Esto nos garantiza artes conceptuales de alta calidad de juegos actuales
+      final uri = Uri.parse('https://api.rawg.io/api/games?key=${ApiService.rawgKey}&ordering=-metacritic&dates=2023-01-01,2024-12-31&page_size=21');
+      
+      final r = await http.get(uri).timeout(const Duration(seconds: 10));
+      if (r.statusCode == 200) {
+        final data = jsonDecode(r.body);
+        final results = data['results'] as List? ?? [];
+        setState(() {
+          _avatars = results
+              .map((g) => g['background_image']?.toString())
+              .where((url) => url != null && url.isNotEmpty)
+              .cast<String>()
+              .toList();
+        });
+      }
+    } catch (e) {
+      print('Error cargando avatares premium: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

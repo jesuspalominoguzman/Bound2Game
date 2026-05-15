@@ -264,7 +264,7 @@ class ApiService {
   static String get baseUrl => dotenv.env['API_URL'] ?? '';
 
   static const _timeout = Duration(seconds: 20);
-  static const String _rawgKey = '42709b841ddd4990af559a90c96b8b0e';
+  static const String rawgKey = '42709b841ddd4990af559a90c96b8b0e';
 
   // Preparamos las cabeceras, metiendo el token de seguridad si hace falta.
   static Future<Map<String, String>> _headers({bool withAuth = false}) async {

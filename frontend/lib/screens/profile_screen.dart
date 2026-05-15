@@ -39,7 +39,7 @@ class ProfileScreen extends StatefulWidget {
 class ProfileScreenState extends State<ProfileScreen> {
   late Future<User> _profileFuture;
   late Future<List<ApiGame>> _libraryFuture;
-  Color _dominantColor = _yellow;
+  Color _dominantColor = _bg; // Empezamos en negro neutro para evitar el flash amarillo
 
   @override
   void initState() {
@@ -48,8 +48,6 @@ class ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _loadData() {
-    // Reseteamos el color al cargar para evitar el efecto de "color antiguo"
-    _dominantColor = _yellow;
     _profileFuture = ApiService.fetchMyProfile().then((u) {
       _updatePalette(u.avatarUrl);
       return u;
@@ -299,7 +297,8 @@ class ProfileScreenState extends State<ProfileScreen> {
                 children: [
                   // Fondo dinámico
                   AnimatedContainer(
-                    duration: const Duration(milliseconds: 500),
+                    duration: const Duration(milliseconds: 800),
+                    curve: Curves.easeInOut,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,

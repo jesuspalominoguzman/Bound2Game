@@ -42,7 +42,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   User? _user;
   bool _isLoadingProfile = true;
   late Future<List<ApiGame>> _libraryFuture;
-  Color _dominantColor = _yellow;
+  Color _dominantColor = _bg; // Empezamos en negro neutro para evitar el flash amarillo
   bool _isFriendActionLoading = false;
   StreamSubscription<Map<String, dynamic>>? _friendRequestSub;
 
@@ -72,8 +72,6 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Future<void> _loadProfile() async {
-    // Reseteamos el color al cargar para evitar heredar el del perfil anterior
-    setState(() => _dominantColor = _yellow);
     try {
       final u = await ApiService.getUserProfilePublic(widget.user.id);
       _updatePalette(u.avatarUrl);
@@ -439,7 +437,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
                 children: [
                   // Fondo dinámico
                   AnimatedContainer(
-                    duration: const Duration(milliseconds: 500),
+                    duration: const Duration(milliseconds: 800),
+                    curve: Curves.easeInOut,
                     decoration: BoxDecoration(
                       gradient: LinearGradient(
                         begin: Alignment.topCenter,
