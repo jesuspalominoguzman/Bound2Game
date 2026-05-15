@@ -3,6 +3,6 @@
   "version": "1.0.0",
   "description": "Bound2Game Global Scripts",
   "scripts": {
-    "start": "node scripts/set-env.js && cd frontend && flutter run"
+    "start": "cd frontend && flutter run"
   }
 }

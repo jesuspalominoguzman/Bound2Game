@@ -22,6 +22,7 @@ const _green   = Color(0xFF4AF626);
 const _red     = Color(0xFFFF4040);
 const _purple  = Color(0xFF7B61FF);
 const _cyan    = Color(0xFF00E5FF);
+const _orange  = Color(0xFFFF9800);
 
 // Una cuenta rápida para saber cuánto nos sale la hora de vicio basándonos en lo que nos costó el juego.
 double _costPerHour(double price, int playtime) {
@@ -188,7 +189,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
                 const SizedBox(height: 24),
 
                 // Módulo ROI
-                _RoiModule(game: game),
+                _RoiModule(game: game, isOwned: _isOwned),
                 const SizedBox(height: 16),
 
                 // Módulo Requisitos PC
@@ -379,12 +380,27 @@ class _HeaderChip extends StatelessWidget {
 }
 
 class _RoiModule extends StatelessWidget {
-  const _RoiModule({required this.game});
+  const _RoiModule({required this.game, required this.isOwned});
   final Game game;
+  final bool isOwned;
+
   @override
   Widget build(BuildContext context) {
-    final cph = _costPerHour(game.price, game.playtime);
+    // Si el juego está en la biblioteca y el usuario ha registrado horas reales,
+    // usamos esas horas para el cálculo. Si no, usamos la estimación de HLTB.
+    final bool usingRealHours = isOwned && (game.playtime) > 0;
+    final int hoursForCalc = usingRealHours
+        ? game.playtime
+        : (game.hltb?.main ?? 0);
+
+    final cph   = _costPerHour(game.price, hoursForCalc);
     final color = _roiColor(cph);
+
+    // La columna central cambia color y etiqueta según la fuente de horas.
+    final Color hoursColor  = usingRealHours ? _orange : _cyan;
+    final String hoursLabel = usingRealHours ? 'Tus horas reales' : 'HLTB est.';
+    final String hoursValue = hoursForCalc > 0 ? '${hoursForCalc}h' : '--';
+
     return _ModuleCard(
       icon: Icons.analytics_rounded, iconColor: _purple, title: 'Rentabilidad Teórica (ROI)',
       child: Column(
@@ -393,8 +409,8 @@ class _RoiModule extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _RoiStat(label: 'Precio', value: '${game.price.toStringAsFixed(0)}€', color: Colors.white),
-              _RoiStat(label: 'HLTB est.', value: '${game.hltb?.main ?? "--"}h', color: _cyan),
-              _RoiStat(label: 'Coste/hora', value: '${cph.toStringAsFixed(2)}€/h', color: color),
+              _RoiStat(label: hoursLabel, value: hoursValue, color: hoursColor),
+              _RoiStat(label: 'Coste/hora', value: hoursForCalc > 0 ? '${cph.toStringAsFixed(2)}€/h' : '--', color: hoursForCalc > 0 ? color : _textSub),
             ],
           ),
           const SizedBox(height: 16),

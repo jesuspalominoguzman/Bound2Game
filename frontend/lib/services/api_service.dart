@@ -2,7 +2,7 @@
 // He intentado dejarlo bien organizado para no volverme loco cuando tenga que añadir rutas nuevas en el backend.
 
 import 'dart:convert';
-import 'dart:io' show Platform;
+
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'auth_service.dart';
@@ -259,23 +259,9 @@ class ApiException implements Exception {
 
 // Aquí es donde hacemos las peticiones HTTP reales al servidor.
 class ApiService {
-  
-  // Detectamos si estamos en el emulador de Android o en iOS/móvil real para saber a qué IP llamar.
-  static String get baseUrl {
-    // Si tenemos una URL en el .env, usamos esa primero.
-    final envUrl = dotenv.env['API_URL'];
-    if (envUrl != null && envUrl.isNotEmpty) {
-      return envUrl;
-    }
 
-    // El emulador de Android usa la 10.0.2.2 para hablar con el PC.
-    try {
-      if (Platform.isAndroid) {
-        return 'http://10.0.2.2:3000';
-      }
-    } catch (_) {}
-    return 'http://localhost:3000';
-  }
+  // La URL base del backend en la nube. Siempre viene del archivo .env (API_URL).
+  static String get baseUrl => dotenv.env['API_URL'] ?? '';
 
   static const _timeout = Duration(seconds: 20);
 
