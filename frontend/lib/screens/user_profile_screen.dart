@@ -4,6 +4,8 @@ import '../models/game_model.dart' as gm;
 import '../services/api_service.dart';
 import 'package:flutter/services.dart';
 import 'package:palette_generator/palette_generator.dart';
+import 'dart:async';
+import '../services/presence_service.dart';
 import 'game_detail_screen.dart';
 
 // ── Paleta ────────────────────────────────────────────────────────────────────
@@ -41,6 +43,7 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   late Future<List<ApiGame>> _libraryFuture;
   Color _dominantColor = _yellow;
   bool _isFriendActionLoading = false;
+  StreamSubscription<Map<String, dynamic>>? _friendRequestSub;
 
   @override
   void initState() {
@@ -49,6 +52,22 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     _loadProfile();
     // Cargar biblioteca (Intenta cargar completa, si no son amigos fallback a preview)
     _libraryFuture = _loadLibrary();
+
+    // Escuchar cambios de amistad en tiempo real
+    _friendRequestSub = PresenceService.instance.friendRequestUpdates.listen((data) {
+      if (!mounted) return;
+      final eventUserId = data['userId'] as String?;
+      final type = data['type'] as String?;
+      
+      // Si el evento viene del usuario cuyo perfil estamos viendo
+      if (eventUserId == widget.user.id) {
+        debugPrint('🆕 Perfil: Actualizando en tiempo real ($type)');
+        setState(() {
+          _loadProfile(); 
+          _libraryFuture = _loadLibrary(); 
+        });
+      }
+    });
   }
 
   Future<void> _loadProfile() async {
@@ -192,6 +211,12 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         );
       }
     }
+  }
+
+  @override
+  void dispose() {
+    _friendRequestSub?.cancel();
+    super.dispose();
   }
 
   @override

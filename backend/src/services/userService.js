@@ -29,6 +29,15 @@ class UserService {
             sender.friends = sender.friends.filter(id => id.toString() !== targetId);
             receiver.friends = receiver.friends.filter(id => id.toString() !== senderId);
             await Promise.all([sender.save(), receiver.save()]);
+
+            if (io) {
+                io.of('/chat').to(`user_${targetId}`).emit('friendRequest', {
+                    username: sender.username,
+                    userId: senderId,
+                    type: 'removed'
+                });
+            }
+
             return { status: 200, code: 'none', message: 'Amigo eliminado' };
         }
 
@@ -57,6 +66,15 @@ class UserService {
         if (alreadySent) {
             receiver.pendingRequests = receiver.pendingRequests.filter(id => id.toString() !== senderId);
             await receiver.save();
+
+            if (io) {
+                io.of('/chat').to(`user_${targetId}`).emit('friendRequest', {
+                    username: sender.username,
+                    userId: senderId,
+                    type: 'cancelled'
+                });
+            }
+
             return { status: 200, code: 'none', message: 'Solicitud cancelada' };
         }
 

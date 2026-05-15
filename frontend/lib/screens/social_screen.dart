@@ -62,8 +62,8 @@ class _SocialScreenState extends State<SocialScreen> {
     // Escuchamos nuevas solicitudes de amistad en tiempo real
     _friendRequestSub = PresenceService.instance.friendRequestUpdates.listen((_) {
       if (mounted) {
-        debugPrint('🆕 Recargando datos sociales por nueva solicitud...');
-        _loadData();
+        debugPrint('🆕 Recargando datos sociales por notificación en tiempo real...');
+        setState(() => _loadData());
       }
     });
   }
