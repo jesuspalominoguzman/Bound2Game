@@ -565,25 +565,27 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
     return SliverToBoxAdapter(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        child: SizedBox(
-          width: double.infinity,
-          height: 40,
-          child: ElevatedButton.icon(
-            onPressed: _isFriendActionLoading ? null : () => _handleFriendAction(u),
-            icon: _isFriendActionLoading 
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-              : Icon(icon, size: 20),
-            label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: status == 'friends' || status == 'accepted' 
-                ? _cyan.withValues(alpha: 0.1) 
-                : _yellow,
-              foregroundColor: status == 'friends' || status == 'accepted' ? _cyan : Colors.black,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: status == 'friends' || status == 'accepted' ? _cyan.withValues(alpha: 0.4) : Colors.transparent),
+        child: Center(
+          child: SizedBox(
+            height: 48,
+            child: ElevatedButton.icon(
+              onPressed: _isFriendActionLoading ? null : () => _handleFriendAction(u),
+              icon: _isFriendActionLoading 
+                ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                : Icon(icon, size: 20),
+              label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                backgroundColor: status == 'friends' || status == 'accepted' 
+                  ? _bgCard2 
+                  : _yellow,
+                foregroundColor: status == 'friends' || status == 'accepted' ? _yellow : Colors.black,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  side: BorderSide(color: status == 'friends' || status == 'accepted' ? _yellow.withValues(alpha: 0.3) : Colors.transparent),
+                ),
+                elevation: 0,
               ),
-              elevation: 0,
             ),
           ),
         ),
