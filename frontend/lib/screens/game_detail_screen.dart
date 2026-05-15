@@ -238,10 +238,11 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
           backgroundColor: _bgCard,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: _border)),
           title: const Text('Editar Entrada', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
               const Text('Estado', style: TextStyle(color: _textSub, fontSize: 12)),
               const SizedBox(height: 8),
               Container(
@@ -289,6 +290,7 @@ class _GameDetailScreenState extends State<GameDetailScreen> {
               ),
             ],
           ),
+        ),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancelar', style: TextStyle(color: _textSub))),
             ElevatedButton(

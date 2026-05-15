@@ -567,13 +567,13 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
         child: SizedBox(
           width: double.infinity,
-          height: 48,
+          height: 40,
           child: ElevatedButton.icon(
             onPressed: _isFriendActionLoading ? null : () => _handleFriendAction(u),
             icon: _isFriendActionLoading 
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
               : Icon(icon, size: 20),
-            label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+            label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
             style: ElevatedButton.styleFrom(
               backgroundColor: status == 'friends' || status == 'accepted' 
                 ? _cyan.withValues(alpha: 0.1) 
