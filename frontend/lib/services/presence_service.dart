@@ -19,6 +19,9 @@ class PresenceService {
   final _presenceController = StreamController<Map<String, dynamic>>.broadcast();
   Stream<Map<String, dynamic>> get presenceUpdates => _presenceController.stream;
 
+  final _friendRequestController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get friendRequestUpdates => _friendRequestController.stream;
+
   // Guardamos el ID del usuario cuando hace login.
   void init(String userId) {
     _userId = userId;
@@ -48,6 +51,16 @@ class PresenceService {
         _presenceController.add(data);
       } else if (data != null) {
         _presenceController.add(Map<String, dynamic>.from(data));
+      }
+    });
+
+    // Escuchamos nuevas solicitudes de amistad o aceptaciones
+    _socket!.on('friendRequest', (data) {
+      debugPrint('🔔 Presence: Notificación de amistad recibida: $data');
+      if (data != null && data is Map<String, dynamic>) {
+        _friendRequestController.add(data);
+      } else if (data != null) {
+        _friendRequestController.add(Map<String, dynamic>.from(data));
       }
     });
 
@@ -82,5 +95,6 @@ class PresenceService {
 
   void dispose() {
     _presenceController.close();
+    _friendRequestController.close();
   }
 }

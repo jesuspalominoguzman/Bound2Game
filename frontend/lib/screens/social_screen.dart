@@ -41,6 +41,7 @@ class _SocialScreenState extends State<SocialScreen> {
 
   List<User> _friendsList = [];
   StreamSubscription<Map<String, dynamic>>? _presenceSub;
+  StreamSubscription<Map<String, dynamic>>? _friendRequestSub;
 
   @override
   void initState() {
@@ -57,6 +58,14 @@ class _SocialScreenState extends State<SocialScreen> {
 
     // Esto es clave: escuchamos al servidor por si alguien se conecta o desconecta.
     _presenceSub = PresenceService.instance.presenceUpdates.listen(_onPresenceUpdate);
+    
+    // Escuchamos nuevas solicitudes de amistad en tiempo real
+    _friendRequestSub = PresenceService.instance.friendRequestUpdates.listen((_) {
+      if (mounted) {
+        debugPrint('🆕 Recargando datos sociales por nueva solicitud...');
+        _loadData();
+      }
+    });
   }
 
   // Si un amigo se conecta o se desconecta, actualizamos la lista al momento.
@@ -91,6 +100,7 @@ class _SocialScreenState extends State<SocialScreen> {
   @override
   void dispose() {
     _presenceSub?.cancel();
+    _friendRequestSub?.cancel();
     _searchCtrl.dispose();
     _searchFocus.dispose();
     super.dispose();
