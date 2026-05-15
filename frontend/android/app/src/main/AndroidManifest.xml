@@ -29,7 +29,15 @@
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
 
-            <!-- Deep Linking (HTTPS App Links) -->
+            <!-- Deep Linking (Custom Scheme - Reliable for Dev) -->
+            <intent-filter android:label="bound2game">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="bound2game" android:host="user" />
+            </intent-filter>
+
+            <!-- Deep Linking (HTTPS App Links - Professional) -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

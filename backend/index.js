@@ -65,6 +65,86 @@ app.get('/.well-known/apple-app-site-association', (req, res) => {
     });
 });
 
+// ── Página de aterrizaje para Deep Linking (Fallback Navegador) ──────────────
+// Si el App Link falla y el usuario cae en el navegador, le damos un botón
+// para forzar la apertura de la app mediante el esquema custom.
+app.get('/user/:userId', (req, res) => {
+    const userId = req.params.userId;
+    res.send(`
+      <!DOCTYPE html>
+      <html lang="es">
+      <head>
+        <meta charset="UTF-8">
+        <title>Abriendo Bound2Game...</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+          body { 
+            background: #0A0A0A; 
+            color: white; 
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            height: 100vh; 
+            margin: 0; 
+            text-align: center;
+          }
+          .card {
+            background: #161616;
+            padding: 40px;
+            border-radius: 24px;
+            border: 1px solid #222;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            max-width: 320px;
+            width: 90%;
+          }
+          .logo { 
+            width: 80px; 
+            height: 80px;
+            background: #FFB800;
+            border-radius: 20px; 
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            box-shadow: 0 10px 20px rgba(255, 184, 0, 0.2);
+          }
+          h2 { margin: 0 0 10px 0; font-size: 24px; font-weight: 800; }
+          p { color: #888; font-size: 15px; margin-bottom: 30px; line-height: 1.5; }
+          .btn { 
+            background: #FFB800; 
+            color: black; 
+            padding: 16px 40px; 
+            border-radius: 14px; 
+            text-decoration: none; 
+            font-weight: 800; 
+            font-size: 16px; 
+            display: inline-block;
+            transition: transform 0.2s;
+          }
+          .btn:active { transform: scale(0.96); }
+        </style>
+        <script>
+          // Intentar redirigir automáticamente al abrir la página
+          setTimeout(() => {
+            window.location.href = "bound2game://user/${userId}";
+          }, 500);
+        </script>
+      </head>
+      <body>
+        <div class="card">
+          <div class="logo">🎮</div>
+          <h2>Bound2Game</h2>
+          <p>Te hemos enviado un perfil para que lo veas en la aplicación.</p>
+          <a href="bound2game://user/${userId}" class="btn">ABRIR EN LA APP</a>
+        </div>
+      </body>
+      </html>
+    `);
+});
+
 // ── Levantar el servidor con soporte WebSocket ────────────────────────────
 // Envolvemos Express en un servidor HTTP nativo para que Socket.io pueda
 // compartir el mismo puerto sin cambiar ninguna ruta REST existente.
