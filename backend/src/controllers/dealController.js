@@ -1,12 +1,12 @@
 const dealService = require('../services/dealService');
 
 /**
- * GET /api/games/deals?limit=20
+ * GET /api/games/deals?limit=100
  * Obtiene los mejores deals actuales de CheapShark
  */
 const getDeals = async (req, res) => {
     try {
-        const limit = Math.min(parseInt(req.query.limit || '20', 10), 200);
+        const limit = Math.min(parseInt(req.query.limit || '100', 10), 200);
         const deals = await dealService.getDeals(limit);
         return res.json({ deals });
     } catch (error) {
