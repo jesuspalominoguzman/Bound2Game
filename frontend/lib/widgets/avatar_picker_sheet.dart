@@ -23,9 +23,10 @@ class _AvatarPickerSheetState extends State<AvatarPickerSheet> {
   Future<void> _loadAvatars() async {
     setState(() => _isLoading = true);
     try {
-      // Traemos 21 imágenes (múltiplo de 3) de juegos altamente visuales e icónicos
-      final results = await ApiService.fetchRawgAvatars('legendary characters');
+      // Usamos una búsqueda más específica para obtener "iconos" o "personajes" centrados
+      final results = await ApiService.fetchRawgAvatars('gaming icon character');
       setState(() {
+        // Cogemos 21 para que sea múltiplo de 3
         _avatars = results.take(21).toList();
       });
     } finally {

@@ -48,6 +48,8 @@ class ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _loadData() {
+    // Reseteamos el color al cargar para evitar el efecto de "color antiguo"
+    _dominantColor = _yellow;
     _profileFuture = ApiService.fetchMyProfile().then((u) {
       _updatePalette(u.avatarUrl);
       return u;

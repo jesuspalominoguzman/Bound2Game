@@ -72,6 +72,8 @@ class _UserProfileScreenState extends State<UserProfileScreen> {
   }
 
   Future<void> _loadProfile() async {
+    // Reseteamos el color al cargar para evitar heredar el del perfil anterior
+    setState(() => _dominantColor = _yellow);
     try {
       final u = await ApiService.getUserProfilePublic(widget.user.id);
       _updatePalette(u.avatarUrl);
